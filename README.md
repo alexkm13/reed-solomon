@@ -4,7 +4,7 @@ A high-performance Reed-Solomon erasure coding engine in Rust. Hand-built from G
 
 ## What It Does
 
-Splits data into `k` data shards, generates `m` parity shards, and reconstructs any missing shards from survivors — as long as at least `k` shards remain.
+Splits data into `k` data shards, generates `m` parity shards, and reconstructs any missing shards from survivors, as long as at least `k` shards remain.
 
 ## Status
 
