@@ -3,6 +3,7 @@ const W: u16 = 8; // w in 2^w -- hardcode to 8 to represent bytes
 const LOG_ARR: [u8; 256] = [0u8; 256]; // log table for quick access
 const EXP_ARR: [u8; 512] = [0u8; 512]; // exponential table for inverse log table
 const NW_MINUS_1: u16 = 255;
+
 // adds/subtracts (XOR) between two elements in a field
 pub fn add(a: u8, b: u8) -> u8 {
     a ^ b
@@ -45,7 +46,7 @@ pub fn div(a: u8, b: u8, log: &[u8; 256], exp: &[u8; 512]) -> u8 {
     exp[diff_log as usize] 
 }
 
-// sets up the log and exponential tables 
+// sets up the log and exponential tables
 pub fn setup_tables() -> ([u8; 256], [u8; 512]) {
     let mut b: u16 = 1;
     let mut exp = [0u8; 512];
@@ -54,7 +55,7 @@ pub fn setup_tables() -> ([u8; 256], [u8; 512]) {
         exp[i] = b as u8;
         log[b as usize] = i as u8;
         b <<= 1; 
-        if b & 0x100 != 0 { 
+        if b & 0x100 != 0 { // checks for overflow by seeing if there's  
             b ^= 0x11D;
         }
     }
