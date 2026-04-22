@@ -47,7 +47,7 @@ pub fn div(a: u8, b: u8, log: &[u8; 256], exp: &[u8; 512]) -> u8 {
 }
 
 // sets up the log and exponential tables
-pub fn setup_tables() -> ([u8; 256], [u8; 512]) {
+pub const fn setup_tables() -> ([u8; 256], [u8; 512]) {
     let mut b: u16 = 1;
     let mut exp = [0u8; 512];
     let mut log = [0u8; 256];
