@@ -17,11 +17,7 @@ pub enum MatrixError {
     NotInvertible,
 }
 
-impl Matrix {
-    pub fn elimination(&self, m: &Matrix) -> Result<Matrix, MatrixError> {
-        // TODO
-    }
-
+impl Matrix { 
     pub fn scale_row(scalar: u8, row: usize, m: &mut Matrix) -> () {
         for e in &mut m.elements[row * m.col..(row * m.col + m.col)] {
             *e = mult(*e, scalar, &LOG_TABLE, &EXP_TABLE);
