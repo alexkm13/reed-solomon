@@ -18,24 +18,27 @@ pub enum MatrixError {
 }
 
 impl Matrix {
-    pub fn multiply(&self, m: &Matrix) -> Result<Matrix, MatrixError> {
+    pub fn elimination(&self, m: &Matrix) -> Result<Matrix, MatrixError> {
         // TODO
     }
 
-    pub fn scale_row(scalar: u8, row: u16, m: &mut Matrix) -> () {
-        for e in &mut m.elements[row * m.col..((row * m.col) as usize + m.col as usize)] {
+    pub fn scale_row(scalar: u8, row: usize, m: &mut Matrix) -> () {
+        for e in &mut m.elements[row * m.col..(row * m.col + m.col)] {
             *e = mult(*e, scalar, &LOG_TABLE, &EXP_TABLE);
         }
     }
 
     pub fn add_rows(base_row: usize, target_row: usize, m: &mut Matrix) -> () {
-        for i in &m.elements[&m.row * &m.col..((&m.row * &m.col) + &m.col)] {
-            *m.elements[target_row][i] = add(&m.elements[base_row][i], &m.elements[target_row][i]);
+        for i in 0..m.col {
+            let val = add(m.elements[base_row * m.col + i], m.elements[target_row * m.col + i]);
+            m.elements[(target_row * m.col) + i] = val;
         }
     }
 
-    pub fn swap_rows(base_row: u8, target_row: u8, m: &mut Matrix) -> () {
-        //TODO
+    pub fn swap_rows(base_row: usize, target_row: usize, m: &mut Matrix) -> () {
+        for i in 0..m.col {
+            m.elements.swap((base_row * m.col) + i, (target_row * m.col) + i);
+        }
     }
 } 
 
