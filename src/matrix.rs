@@ -20,13 +20,13 @@ pub enum MatrixError {
 impl Matrix {
     pub fn elimination(&mut self) -> Result<(), MatrixError> {
         let mut found: bool = false;
-        for k in 0..self.col {
+        for k in 0..std::cmp::min(self.row, self.col) {
             if self.elements[k * self.col + k] == 0 {
                 for i in (k+1)..self.row {
                     if self.elements[i * self.col + k] != 0 {
                         self.swap_rows(k, i);
                         found = true;
-                        break
+                        break;
                     }
                 }
                 if !found {
@@ -45,6 +45,35 @@ impl Matrix {
                 self.add_scaled_row(factor, k, n);
             }
         }
+        Ok(())
+    }
+
+    pub fn inverse(&mut self) -> Result<(), MatrixError> {
+        if self.row != self.col {return Err(MatrixError::DimensionMismatch)};
+
+        let mut aug_vec: Vec<u8> = Vec::new();
+        let mut identity: Vec<u8> = Vec::new();
+
+        for i in 0..self.row {
+            aug_vec.extend(&self.elements[i * self.col .. (i + 1) * self.col]);
+            for n in 0..self.col {
+                if n != i {
+                    identity.push(0);
+                } else {
+                    identity.push(1);
+                }
+            }
+            aug_vec.extend(&identity);
+            identity.clear();
+        }
+
+        let mut m = Matrix{row: self.row, col: self.col * 2, elements: aug_vec};
+        m.elimination()?;
+        
+        for r in 0..self.row {
+           self.elements[r * self.col .. (r + 1) * self.col].copy_from_slice(&m.elements[r * 2 * self.col + self.col .. (r + 1) * 2 * self.col]);        
+        }
+
         Ok(())
     }
 

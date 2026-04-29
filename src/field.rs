@@ -1,7 +1,4 @@
 // galois field (GF^8) operations
-const W: u16 = 8; // w in 2^w -- hardcode to 8 to represent bytes
-const LOG_ARR: [u8; 256] = [0u8; 256]; // log table for quick access
-const EXP_ARR: [u8; 512] = [0u8; 512]; // exponential table for inverse log table
 const NW_MINUS_1: u16 = 255;
 
 // adds/subtracts (XOR) between two elements in a field
