@@ -77,6 +77,26 @@ impl Matrix {
         Ok(())
     }
 
+    pub fn multiplication(&mut self, other: Matrix) -> Result<Matrix, MatrixError> {
+        if self.col != other.row {return Err(MatrixError::DimensionMismatch);};
+
+        let mut result: Vec<u8> = Vec::new();
+        let mut sum: u8 = 0;
+        let mut product: u8;
+        for r in 0..self.row {
+            for c in 0..other.col {
+                for i in 0..self.row {
+                    product = mult(self.elements[r * self.col + i], other.elements[i * other.col + c], &LOG_TABLE, &EXP_TABLE); 
+                    sum ^= product;
+                }
+
+                result[r * other.col + c] = sum;
+            }
+        }
+       let new_res: Matrix = Matrix{row: self.row, col: other.col, elements: result};
+       return Ok(new_res);
+    }
+
     pub fn add_scaled_row(&mut self, scalar: u8, source_row: usize, target_row: usize) -> () {
        for i in 0..self.col {
            let val = mult(self.elements[source_row * self.col + i], scalar, &LOG_TABLE, &EXP_TABLE);
