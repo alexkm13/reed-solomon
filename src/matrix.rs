@@ -5,6 +5,7 @@ const LOG_TABLE: [u8; 256] = SETUP.0;
 const EXP_TABLE: [u8; 512] = SETUP.1;
 
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Matrix {
     pub row: usize,
     pub col: usize,
@@ -77,7 +78,7 @@ impl Matrix {
         Ok(())
     }
 
-    pub fn multiplication(&mut self, other: Matrix) -> Result<Matrix, MatrixError> {
+    pub fn multiplication(&self, other: &Matrix) -> Result<Matrix, MatrixError> {
         if self.col != other.row {return Err(MatrixError::DimensionMismatch);};
 
         let mut result: Vec<u8> = Vec::new();
@@ -85,16 +86,17 @@ impl Matrix {
         let mut product: u8;
         for r in 0..self.row {
             for c in 0..other.col {
-                for i in 0..self.row {
+                for i in 0..other.row {
                     product = mult(self.elements[r * self.col + i], other.elements[i * other.col + c], &LOG_TABLE, &EXP_TABLE); 
                     sum ^= product;
                 }
 
-                result[r * other.col + c] = sum;
+                result.push(sum);
+                sum = 0;
             }
         }
        let new_res: Matrix = Matrix{row: self.row, col: other.col, elements: result};
-       return Ok(new_res);
+       Ok(new_res)
     }
 
     pub fn add_scaled_row(&mut self, scalar: u8, source_row: usize, target_row: usize) -> () {

@@ -202,4 +202,132 @@ mod tests {
         assert_eq!(r10, 0, "A*A^-1 [1][0] should be 0");
         assert_eq!(r11, 1, "A*A^-1 [1][1] should be 1");
     }
+
+    // ===== Multiplication tests =====
+
+    #[test]
+    fn mult_identity_right() {
+        // A * I == A
+        let a = Matrix {
+            row: 3,
+            col: 3,
+            elements: vec![
+                1, 2, 3,
+                4, 5, 6,
+                7, 8, 9,
+            ],
+        };
+        let identity = Matrix {
+            row: 3,
+            col: 3,
+            elements: vec![
+                1, 0, 0,
+                0, 1, 0,
+                0, 0, 1,
+            ],
+        };
+        let result = a.multiplication(&identity).unwrap();
+        assert_eq!(result.elements, a.elements);
+    }
+
+    #[test]
+    fn mult_identity_left() {
+        // I * A == A
+        let a = Matrix {
+            row: 3,
+            col: 3,
+            elements: vec![
+                1, 2, 3,
+                4, 5, 6,
+                7, 8, 9,
+            ],
+        };
+        let identity = Matrix {
+            row: 3,
+            col: 3,
+            elements: vec![
+                1, 0, 0,
+                0, 1, 0,
+                0, 0, 1,
+            ],
+        };
+        let result = identity.multiplication(&a).unwrap();
+        assert_eq!(result.elements, a.elements);
+    }
+
+    #[test]
+    fn mult_dimension_mismatch() {
+        // 2x3 * 2x2 should fail (3 != 2)
+        let a = Matrix {
+            row: 2,
+            col: 3,
+            elements: vec![
+                1, 2, 3,
+                4, 5, 6,
+            ],
+        };
+        let b = Matrix {
+            row: 2,
+            col: 2,
+            elements: vec![
+                1, 2,
+                3, 4,
+            ],
+        };
+        assert_eq!(a.multiplication(&b), Err(MatrixError::DimensionMismatch));
+    }
+
+    #[test]
+    fn mult_2x2_hand_computed_gf256() {
+        // [[1, 2], [3, 4]] * [[5, 6], [7, 8]] in GF(2^8)
+        //
+        // In GF(2^8), multiplication uses log/exp tables, addition is XOR.
+        // Using distributivity for small values:
+        //   2*7 = 2*(1+2+4) = 2 + 4 + 8 = 14
+        //   2*8 = 16
+        //   3*5 = (1+2)*(1+4) = 1 + 4 + 2 + 8 = 15
+        //   4*7 = 4*(1+2+4) = 4 + 8 + 16 = 28
+        //   3*6 = (1+2)*(2+4) = 2 + 4 + 4 + 8 = 10
+        //   4*8 = 32
+        //
+        // Result:
+        //   [0][0] = (1*5) XOR (2*7) = 5 XOR 14 = 11
+        //   [0][1] = (1*6) XOR (2*8) = 6 XOR 16 = 22
+        //   [1][0] = (3*5) XOR (4*7) = 15 XOR 28 = 19
+        //   [1][1] = (3*6) XOR (4*8) = 10 XOR 32 = 42
+        let a = Matrix {
+            row: 2,
+            col: 2,
+            elements: vec![1, 2, 3, 4],
+        };
+        let b = Matrix {
+            row: 2,
+            col: 2,
+            elements: vec![5, 6, 7, 8],
+        };
+        let result = a.multiplication(&b).unwrap();
+        assert_eq!(result.row, 2);
+        assert_eq!(result.col, 2);
+        assert_eq!(result.elements, vec![11, 22, 19, 42]);
+    }
+
+    #[test]
+    fn mult_by_inverse_gives_identity() {
+        // A * A^-1 == I
+        let original = vec![2, 3, 4, 5];
+        let a = Matrix {
+            row: 2,
+            col: 2,
+            elements: original.clone(),
+        };
+        let mut a_inv = Matrix {
+            row: 2,
+            col: 2,
+            elements: original,
+        };
+        a_inv.inverse().unwrap();
+
+        let result = a.multiplication(&a_inv).unwrap();
+        assert_eq!(result.elements, vec![1, 0, 0, 1], "A * A^-1 should be identity");
+    }
 }
