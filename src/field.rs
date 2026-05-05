@@ -42,7 +42,12 @@ pub fn div(a: u8, b: u8, log: &[u8; 256], exp: &[u8; 512]) -> u8 {
 
     exp[diff_log as usize] 
 }
+pub fn pow(a: u8, b: u8, log: &[u8; 256], exp: &[u8; 512]) -> u8 {
+    if b == 0 { return 1; }
+    if a == 0 { return 0; }   
 
+    exp[(log[a as usize] as usize * b as usize) % 255]
+}
 // sets up the log and exponential tables
 pub const fn setup_tables() -> ([u8; 256], [u8; 512]) {
     let mut b: u16 = 1;

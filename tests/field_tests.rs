@@ -43,4 +43,14 @@ mod tests {
             assert_eq!(mult(a, inv(a, &log, &exp), &log, &exp), 1);
         }
     }
+
+    #[test]
+    fn pow_basic() {
+        let (log, exp) = setup_tables();
+        assert_eq!(pow(2, 0, &log, &exp), 1);
+        assert_eq!(pow(0, 5, &log, &exp), 0);
+        assert_eq!(pow(0, 0, &log, &exp), 1);
+        // 2^3 in GF(2^8) = 8
+        assert_eq!(pow(2, 3, &log, &exp), 8);
+    }
 }

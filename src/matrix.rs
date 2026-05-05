@@ -1,4 +1,4 @@
-use crate::field::{mult, add, inv, setup_tables};
+use crate::field::{mult, add, inv, setup_tables, pow};
 
 const SETUP: ([u8; 256], [u8; 512]) = setup_tables();
 const LOG_TABLE: [u8; 256] = SETUP.0;
@@ -19,6 +19,17 @@ pub enum MatrixError {
 }
 
 impl Matrix {
+    pub fn vandermonde(m: usize, k: usize) -> Matrix {
+        let mut res: Vec<u8> = Vec::new();
+        for r in 0..m {
+            for c in 0..k {
+                res.push(pow(r as u8, c as u8, &LOG_TABLE, &EXP_TABLE));
+            }
+        }
+        let mat: Matrix = Matrix{col: k, row: m, elements: res};
+        return mat;
+    }
+
     pub fn elimination(&mut self) -> Result<(), MatrixError> {
         let mut found: bool = false;
         for k in 0..std::cmp::min(self.row, self.col) {

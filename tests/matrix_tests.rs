@@ -330,4 +330,63 @@ mod tests {
         let result = a.multiplication(&a_inv).unwrap();
         assert_eq!(result.elements, vec![1, 0, 0, 1], "A * A^-1 should be identity");
     }
+
+    // ===== Vandermonde tests =====
+
+    #[test]
+    fn vandermonde_small_entries() {
+        // vandermonde(3, 3) produces V[r][c] = r^c in GF(2^8)
+        // Row 0: 0^0=1, 0^1=0, 0^2=0
+        // Row 1: 1^0=1, 1^1=1, 1^2=1
+        // Row 2: 2^0=1, 2^1=2, 2^2=4
+        let v = Matrix::vandermonde(3, 3);
+        assert_eq!(v.elements[0], 1, "V[0][0] = 0^0 = 1");
+        assert_eq!(v.elements[1], 0, "V[0][1] = 0^1 = 0");
+        assert_eq!(v.elements[4], 1, "V[1][1] = 1^1 = 1");
+        assert_eq!(v.elements[8], 4, "V[2][2] = 2^2 = 4");
+    }
+
+    #[test]
+    fn vandermonde_dimensions() {
+        // vandermonde(5, 3) should have 5 rows, 3 cols, 15 elements
+        let v = Matrix::vandermonde(5, 3);
+        assert_eq!(v.row, 5);
+        assert_eq!(v.col, 3);
+        assert_eq!(v.elements.len(), 15);
+    }
+
+    #[test]
+    fn vandermonde_first_column_all_ones() {
+        // Every V[i][0] = i^0 = 1
+        let v = Matrix::vandermonde(6, 4);
+        for r in 0..6 {
+            assert_eq!(v.elements[r * 4], 1, "V[{}][0] should be 1", r);
+        }
+    }
+
+    #[test]
+    fn vandermonde_second_column_is_row_index() {
+        // V[i][1] = i^1 = i
+        let v = Matrix::vandermonde(5, 3);
+        for r in 0..5 {
+            assert_eq!(v.elements[r * 3 + 1], r as u8, "V[{}][1] should be {}", r, r);
+        }
+    }
+
+    #[test]
+    fn vandermonde_top_kxk_invertible() {
+        // When m > k, the top k×k submatrix should be invertible
+        // This property makes Vandermonde useful for Reed-Solomon
+        let v = Matrix::vandermonde(5, 3);
+
+        // Extract top 3×3 submatrix
+        let mut top = Matrix {
+            row: 3,
+            col: 3,
+            elements: v.elements[0..9].to_vec(),
+        };
+
+        // Should not error - Vandermonde matrices with distinct elements are invertible
+        assert!(top.inverse().is_ok(), "Top k×k of Vandermonde should be invertible");
+    }
 }
