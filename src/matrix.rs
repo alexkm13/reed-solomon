@@ -19,6 +19,14 @@ pub enum MatrixError {
 }
 
 impl Matrix {
+    pub fn vand_fix(m: usize, k: usize) -> Result<Matrix, MatrixError> {
+        let mat: Matrix = Matrix::vandermonde(k + m, k);
+        let k_mat: Matrix = Matrix{col: k, row: k, elements: mat.elements[0 .. k * k].to_vec()};
+        let mut invert: Matrix = k_mat.clone();
+        invert.inverse()?;
+        let res = mat.multiplication(&invert)?;
+        Ok(res)
+    }
     pub fn vandermonde(m: usize, k: usize) -> Matrix {
         let mut res: Vec<u8> = Vec::new();
         for r in 0..m {

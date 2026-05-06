@@ -389,4 +389,67 @@ mod tests {
         // Should not error - Vandermonde matrices with distinct elements are invertible
         assert!(top.inverse().is_ok(), "Top k×k of Vandermonde should be invertible");
     }
+
+    // ===== vand_fix tests =====
+
+    #[test]
+    fn vand_fix_top_kxk_is_identity() {
+        // After vand_fix, the first k×k block should be identity
+        // because V * V_top^-1 makes the top k rows into I
+        let v = Matrix::vand_fix(2, 3).unwrap();
+
+        // Top 3×3 should be identity
+        let expected_identity = vec![
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+        ];
+        assert_eq!(&v.elements[0..9], &expected_identity[..], "Top k×k should be identity");
+    }
+
+    #[test]
+    fn vand_fix_dimensions() {
+        // vand_fix(m, k) returns a Matrix with row == k+m, col == k
+        let v = Matrix::vand_fix(3, 4).unwrap();
+        assert_eq!(v.row, 7, "row should be k + m = 4 + 3 = 7");
+        assert_eq!(v.col, 4, "col should be k = 4");
+        assert_eq!(v.elements.len(), 28, "elements should be (k+m) * k = 28");
+    }
+
+    #[test]
+    fn vand_fix_any_k_rows_invertible() {
+        // Any k-row subset of vand_fix(m, k) should be invertible
+        // This is the property that makes Reed-Solomon work
+        let v = Matrix::vand_fix(2, 3).unwrap(); // 5 rows, 3 cols
+
+        // Test several k-row subsets (picking 3 rows from 5)
+        let test_subsets: Vec<[usize; 3]> = vec![
+            [0, 1, 2], // top 3 (identity)
+            [0, 1, 3], // mix of data and parity
+            [0, 1, 4], // first two data + last parity
+            [0, 3, 4], // one data + two parity
+            [2, 3, 4], // last data + two parity
+            [1, 2, 4], // span across data and parity
+        ];
+
+        for subset in test_subsets {
+            // Extract k rows
+            let mut elements: Vec<u8> = Vec::new();
+            for &row_idx in &subset {
+                elements.extend_from_slice(&v.elements[row_idx * 3..(row_idx + 1) * 3]);
+            }
+
+            let mut submatrix = Matrix {
+                row: 3,
+                col: 3,
+                elements,
+            };
+
+            assert!(
+                submatrix.inverse().is_ok(),
+                "Rows {:?} should be invertible",
+                subset
+            );
+        }
+    }
 }
