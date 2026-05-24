@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use reed_solomon::codec::{split, encode};
+    use reed_solomon::codec::{split, encode, reconstruct, ShardError};
 
     #[test]
     fn evenly_divisible() {
@@ -180,5 +180,201 @@ mod tests {
             parity[0][0], parity2[0][0],
             "Different input data should produce different parity"
         );
+    }
+
+    // --- reconstruct tests ---
+
+    #[test]
+    fn reconstruct_no_shards_lost() {
+        let k = 4;
+        let m = 2;
+        let data_shards: Vec<Vec<u8>> = vec![
+            vec![1, 2, 3, 4],
+            vec![5, 6, 7, 8],
+            vec![9, 10, 11, 12],
+            vec![13, 14, 15, 16],
+        ];
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        let recovered = reconstruct(&all_shards, k, m).unwrap();
+
+        for i in 0..k {
+            assert_eq!(recovered[i], data_shards[i], "Data shard {} mismatch", i);
+        }
+        for i in 0..m {
+            assert_eq!(recovered[k + i], parity_shards[i], "Parity shard {} mismatch", i);
+        }
+    }
+
+    #[test]
+    fn reconstruct_one_data_shard_lost() {
+        let k = 4;
+        let m = 2;
+        let data_shards: Vec<Vec<u8>> = vec![
+            vec![1, 2, 3, 4],
+            vec![5, 6, 7, 8],
+            vec![9, 10, 11, 12],
+            vec![13, 14, 15, 16],
+        ];
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        // Lose data shard 1
+        all_shards[1] = None;
+
+        let recovered = reconstruct(&all_shards, k, m).unwrap();
+
+        for i in 0..k {
+            assert_eq!(recovered[i], data_shards[i], "Data shard {} not recovered correctly", i);
+        }
+    }
+
+    #[test]
+    fn reconstruct_one_parity_shard_lost() {
+        let k = 4;
+        let m = 2;
+        let data_shards: Vec<Vec<u8>> = vec![
+            vec![1, 2, 3, 4],
+            vec![5, 6, 7, 8],
+            vec![9, 10, 11, 12],
+            vec![13, 14, 15, 16],
+        ];
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        // Lose parity shard 0 (index k)
+        all_shards[k] = None;
+
+        let recovered = reconstruct(&all_shards, k, m).unwrap();
+
+        for i in 0..k {
+            assert_eq!(recovered[i], data_shards[i], "Data shard {} mismatch", i);
+        }
+        for i in 0..m {
+            assert_eq!(recovered[k + i], parity_shards[i], "Parity shard {} not recovered correctly", i);
+        }
+    }
+
+    #[test]
+    fn reconstruct_multiple_shards_lost_up_to_m() {
+        let k = 4;
+        let m = 3;
+        let data_shards: Vec<Vec<u8>> = vec![
+            vec![10, 20, 30],
+            vec![40, 50, 60],
+            vec![70, 80, 90],
+            vec![100, 110, 120],
+        ];
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        // Lose m shards (maximum recoverable)
+        all_shards[0] = None;  // data shard 0
+        all_shards[2] = None;  // data shard 2
+        all_shards[k + 1] = None;  // parity shard 1
+
+        let recovered = reconstruct(&all_shards, k, m).unwrap();
+
+        for i in 0..k {
+            assert_eq!(recovered[i], data_shards[i], "Data shard {} not recovered correctly", i);
+        }
+    }
+
+    #[test]
+    fn reconstruct_too_many_shards_lost() {
+        let k = 4;
+        let m = 2;
+        let data_shards: Vec<Vec<u8>> = vec![
+            vec![1, 2, 3, 4],
+            vec![5, 6, 7, 8],
+            vec![9, 10, 11, 12],
+            vec![13, 14, 15, 16],
+        ];
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        // Lose m+1 shards (one more than recoverable)
+        all_shards[0] = None;
+        all_shards[1] = None;
+        all_shards[2] = None;
+
+        let result = reconstruct(&all_shards, k, m);
+
+        assert!(matches!(result, Err(ShardError::UnrecoverableError)));
+    }
+
+    #[test]
+    fn reconstruct_end_to_end() {
+        let k = 4;
+        let m = 2;
+        let original_data: Vec<u8> = b"Hello, Reed-Solomon! This is a test of erasure coding.".to_vec();
+
+        // Split into data shards
+        let data_shards = split(&original_data, k);
+
+        // Encode to get parity shards
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        // Combine into all shards
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        // Simulate losing some shards
+        all_shards[1] = None;  // lose data shard 1
+        all_shards[k] = None;  // lose parity shard 0
+
+        // Reconstruct
+        let recovered = reconstruct(&all_shards, k, m).unwrap();
+
+        // Reassemble and verify
+        let mut reconstructed_data: Vec<u8> = Vec::new();
+        for i in 0..k {
+            reconstructed_data.extend(&recovered[i]);
+        }
+
+        // Trim padding and compare
+        let trimmed: Vec<u8> = reconstructed_data[..original_data.len()].to_vec();
+        assert_eq!(trimmed, original_data, "End-to-end reconstruction failed");
     }
 }
