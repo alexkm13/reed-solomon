@@ -34,25 +34,23 @@ pub fn split(data: &[u8], k: usize) -> Vec<Vec<u8>> {
 }
 
 pub fn encode(data_shards: &[Vec<u8>], m: usize) -> Result<Vec<Vec<u8>>, MatrixError> {
-    let shard_len = data_shards[0].len();
-    let mut parity_shards: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
-    let f: Matrix = Matrix::vand_fix(m, data_shards.len())?;
-    let k = data_shards.len();
+    let shard_len: usize = data_shards[0].len();
+    let k: usize = data_shards.len();
+    let f: Matrix = Matrix::vand_fix(m, k)?;
     let f_trimmed = f.elements[k * k .. (k + m) * k].to_vec();
     let fixed_f: Matrix = Matrix{col: k, row: m, elements: f_trimmed};
-
+    let mut parity_shards: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
     for byte_pos in 0..data_shards[0].len() {
-       let mut d = Vec::with_capacity(k);
-       for shard in data_shards {
-           d.push(shard[byte_pos]);
-       }; 
-
-       let d_mat: Matrix = Matrix{row: data_shards.len(), col: 1, elements: d};
-       let c: Matrix = fixed_f.multiplication(&d_mat)?;
-       for i in 0..m {
+        let mut d: Vec<u8> = Vec::with_capacity(k);
+        for shard in data_shards {
+            d.push(shard[byte_pos]);
+        }
+        let d_mat: Matrix = Matrix{row: k, col: 1, elements: d};
+        let c: Matrix = fixed_f.multiplication(&d_mat)?;
+        for i in 0..m {
            parity_shards[i][byte_pos] = c.elements[i];
-       }
-    } 
+        }
+    }
     Ok(parity_shards)
 }
 
@@ -88,6 +86,7 @@ pub fn reconstruct(shards: &[Option<Vec<u8>>], k: usize, m: usize) -> Result<Vec
         let i = survivor_indices[r];
         a_prime_elements.extend(&a.elements[i * k..(i + 1) * k]);
     }
+
     let a_prime: Matrix = Matrix{col: k, row: k, elements: a_prime_elements};
     let mut a_inv = a_prime.clone();
     a_inv.inverse()?;
@@ -117,4 +116,22 @@ pub fn reconstruct(shards: &[Option<Vec<u8>>], k: usize, m: usize) -> Result<Vec
         }
     }
     Ok(output)
+}
+
+pub fn verify(original: &[u8], recovered: &[Vec<u8>], k: usize) -> bool {
+    let mut recovered_concat: Vec<u8> = Vec::with_capacity(recovered.len() * recovered[0].len());
+    for shard in recovered {
+        for s in shard {
+             recovered_concat.push(*s);
+        }
+    }
+    if recovered_concat.len() < original.len() {
+          return false;
+    }
+    for i in 0..original.len() {
+        if recovered_concat[i] != original[i] {
+            return false;
+        }
+    }
+    true
 }

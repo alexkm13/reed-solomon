@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use reed_solomon::codec::{split, encode, reconstruct, ShardError};
+    use reed_solomon::codec::{split, encode, reconstruct, verify, ShardError};
 
     #[test]
     fn evenly_divisible() {
@@ -376,5 +376,115 @@ mod tests {
         // Trim padding and compare
         let trimmed: Vec<u8> = reconstructed_data[..original_data.len()].to_vec();
         assert_eq!(trimmed, original_data, "End-to-end reconstruction failed");
+    }
+
+    // --- verify tests ---
+
+    #[test]
+    fn verify_identical_input() {
+        let original: Vec<u8> = vec![1, 2, 3];
+        let recovered: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3]];
+        assert!(verify(&original, &recovered, 3));
+    }
+
+    #[test]
+    fn verify_identical_with_padding() {
+        let original: Vec<u8> = vec![1, 2, 3];
+        let recovered: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3], vec![0]];
+        // k=3 means only first 3 shards are concatenated
+        assert!(verify(&original, &recovered, 3));
+    }
+
+    #[test]
+    fn verify_different_content() {
+        let original: Vec<u8> = vec![1, 2, 3];
+        let recovered: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![4]];
+        assert!(!verify(&original, &recovered, 3));
+    }
+
+    #[test]
+    fn verify_different_length_original_longer() {
+        let original: Vec<u8> = vec![1, 2, 3, 4, 5];
+        let recovered: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3]];
+        // recovered_concat = 3 bytes, original = 5 bytes
+        // Returns false because recovered can't hold all of original
+        assert!(!verify(&original, &recovered, 3));
+    }
+
+    #[test]
+    fn verify_end_to_end_happy_path() {
+        let k = 4;
+        let m = 2;
+        let original_data: Vec<u8> = b"Hello, Reed-Solomon!".to_vec();
+
+        let data_shards = split(&original_data, k);
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        // Reconstruct with no losses
+        let recovered = reconstruct(&all_shards, k, m).unwrap();
+
+        assert!(verify(&original_data, &recovered, k));
+    }
+
+    #[test]
+    fn verify_end_to_end_with_losses() {
+        let k = 4;
+        let m = 2;
+        let original_data: Vec<u8> = b"Testing erasure coding recovery!".to_vec();
+
+        let data_shards = split(&original_data, k);
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        // Lose some shards
+        all_shards[0] = None;
+        all_shards[k + 1] = None;
+
+        let recovered = reconstruct(&all_shards, k, m).unwrap();
+
+        assert!(verify(&original_data, &recovered, k));
+    }
+
+    #[test]
+    fn verify_end_to_end_with_corruption() {
+        let k = 4;
+        let m = 2;
+        let original_data: Vec<u8> = b"Corruption detection test!".to_vec();
+
+        let data_shards = split(&original_data, k);
+        let parity_shards = encode(&data_shards, m).unwrap();
+
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+
+        // Corrupt a shard (flip a bit) - this simulates undetected corruption
+        if let Some(ref mut shard) = all_shards[0] {
+            shard[0] ^= 0x01;
+        }
+
+        let recovered = reconstruct(&all_shards, k, m).unwrap();
+
+        // The corrupted data won't match original
+        assert!(!verify(&original_data, &recovered, k));
     }
 }
