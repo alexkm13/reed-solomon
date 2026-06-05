@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use reed_solomon::codec::{split, encode, reconstruct, verify, ShardError};
+    use reed_solomon::codec::{split, encode, encode_hot, reconstruct, verify, ShardError};
+    use reed_solomon::matrix::Matrix;
 
     #[test]
     fn evenly_divisible() {
@@ -486,5 +487,62 @@ mod tests {
 
         // The corrupted data won't match original
         assert!(!verify(&original_data, &recovered, k));
+    }
+
+    // --- encode_hot tests ---
+
+    #[test]
+    fn encode_hot_matches_encode() {
+        let k = 4;
+        let m = 2;
+        let shard_len = 16;
+
+        // Create data shards
+        let data_shards: Vec<Vec<u8>> = (0..k)
+            .map(|i| (0..shard_len).map(|j| ((i * shard_len + j) * 7 + 13) as u8).collect())
+            .collect();
+
+        // Get expected result from encode
+        let expected = encode(&data_shards, m).unwrap();
+
+        // Manually extract coefficients from vand_fix (bottom m rows)
+        let f = Matrix::vand_fix(m, k).unwrap();
+        let coeffs = &f.elements[k * k..(k + m) * k];
+
+        // Allocate parity buffer
+        let mut parity: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
+
+        // Call encode_hot
+        encode_hot(coeffs, &data_shards, &mut parity, k, m);
+
+        // Verify it matches encode
+        assert_eq!(parity, expected, "encode_hot should produce same result as encode");
+    }
+
+    #[test]
+    fn encode_hot_matches_encode_various_sizes() {
+        for (k, m, shard_len) in [(2, 1, 8), (3, 2, 10), (4, 3, 32), (5, 4, 64)] {
+            // Create data shards with varied content
+            let data_shards: Vec<Vec<u8>> = (0..k)
+                .map(|i| (0..shard_len).map(|j| (i ^ j) as u8).collect())
+                .collect();
+
+            // Get expected from encode
+            let expected = encode(&data_shards, m).unwrap();
+
+            // Manual setup: extract bottom m rows of vand_fix
+            let f = Matrix::vand_fix(m, k).unwrap();
+            let coeffs = &f.elements[k * k..(k + m) * k];
+
+            // Allocate parity buffer and call encode_hot
+            let mut parity: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
+            encode_hot(coeffs, &data_shards, &mut parity, k, m);
+
+            assert_eq!(
+                parity, expected,
+                "encode_hot mismatch for k={}, m={}, shard_len={}",
+                k, m, shard_len
+            );
+        }
     }
 }
