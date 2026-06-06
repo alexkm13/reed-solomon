@@ -5,6 +5,13 @@ edition = "2024"
 
 [dependencies]
 
+[dev-dependencies]
+criterion = "0.5"
+
 [[bin]]
 name = "bench"
 path = "benches/throughput.rs"
+
+[[bench]]
+name = "encode_bench"
+harness = false

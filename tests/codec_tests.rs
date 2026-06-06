@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use reed_solomon::codec::{split, encode, encode_hot, reconstruct, verify, ShardError};
+    use reed_solomon::codec::{split, encode, encode_hot, encode_hot_unsafe, reconstruct, verify, ShardError};
     use reed_solomon::matrix::Matrix;
 
     #[test]
@@ -541,6 +541,35 @@ mod tests {
             assert_eq!(
                 parity, expected,
                 "encode_hot mismatch for k={}, m={}, shard_len={}",
+                k, m, shard_len
+            );
+        }
+    }
+
+    #[test]
+    fn encode_hot_unsafe_matches_encode_hot() {
+        for (k, m, shard_len) in [(2, 1, 8), (3, 2, 10), (4, 2, 16), (4, 3, 32), (5, 4, 64)] {
+            // Create data shards
+            let data_shards: Vec<Vec<u8>> = (0..k)
+                .map(|i| (0..shard_len).map(|j| ((i * 17 + j * 31) % 256) as u8).collect())
+                .collect();
+
+            // Extract coefficients from vand_fix
+            let f = Matrix::vand_fix(m, k).unwrap();
+            let coeffs = &f.elements[k * k..(k + m) * k];
+
+            // Run encode_hot (safe version)
+            let mut parity_safe: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
+            encode_hot(coeffs, &data_shards, &mut parity_safe, k, m);
+
+            // Run encode_hot_unsafe
+            let mut parity_unsafe: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
+            encode_hot_unsafe(coeffs, &data_shards, &mut parity_unsafe, k, m);
+
+            // Verify byte-identical output
+            assert_eq!(
+                parity_unsafe, parity_safe,
+                "encode_hot_unsafe mismatch for k={}, m={}, shard_len={}",
                 k, m, shard_len
             );
         }

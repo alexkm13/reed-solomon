@@ -33,11 +33,32 @@ pub fn split(data: &[u8], k: usize) -> Vec<Vec<u8>> {
     shards
 }
 
+pub fn encode(data_shards: &[Vec<u8>], m: usize) -> Result<Vec<Vec<u8>>, MatrixError> {
+    let shard_len: usize = data_shards[0].len();
+    let k: usize = data_shards.len();
+    let f: Matrix = Matrix::vand_fix(m, k)?;
+    let f_trimmed = f.elements[k * k .. (k + m) * k].to_vec();
+    let fixed_f: Matrix = Matrix{col: k, row: m, elements: f_trimmed};
+    let mut parity_shards: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
+    for byte_pos in 0..data_shards[0].len() {
+        let mut d: Vec<u8> = Vec::with_capacity(k);
+        for shard in data_shards {
+            d.push(shard[byte_pos]);
+        }
+        let d_mat: Matrix = Matrix{row: k, col: 1, elements: d};
+        let c: Matrix = fixed_f.multiplication(&d_mat)?;
+        for i in 0..m {
+           parity_shards[i][byte_pos] = c.elements[i];
+        }
+    }
+    Ok(parity_shards)
+}
+
 pub fn encode_hot(coeffs: &[u8], data: &[Vec<u8>], parity: &mut [Vec<u8>], k: usize, m: usize) {
     let shard_len: usize = data[0].len();
     for byte_pos in 0..shard_len {
         for j in 0..m {
-            let mut sum: u8 = 0;
+            let mut sum = 0u8;
             for i in 0..k {
                 let coefficient: u8 = coeffs[j * k + i];
                 let data_byte: u8 = data[i][byte_pos];
@@ -48,14 +69,20 @@ pub fn encode_hot(coeffs: &[u8], data: &[Vec<u8>], parity: &mut [Vec<u8>], k: us
     }
 }
 
-pub fn encode(data_shards: &[Vec<u8>], m: usize) -> Result<Vec<Vec<u8>>, MatrixError> {
-    let shard_len: usize = data_shards[0].len();
-    let k: usize = data_shards.len();
-    let f: Matrix = Matrix::vand_fix(m, k)?;
-    let coeffs = &f.elements[k * k..(k + m) * k];
-    let mut parity_shards: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
-    encode_hot(coeffs, data_shards, &mut parity_shards, k, m);
-    Ok(parity_shards)
+pub fn encode_hot_unsafe(coeffs: &[u8], data: &[Vec<u8>], parity: &mut [Vec<u8>], k: usize, m: usize) {
+    let shard_len: usize = data[0].len();
+    let c_ptr: *const u8 = coeffs.as_ptr();
+    for byte_pos in 0..shard_len {
+        for j in 0..m {
+            let mut sum = 0u8;
+            for i in 0..k {
+                let coefficient: u8 = unsafe { *c_ptr.add(j * k + i) };
+                let data_byte: u8 = unsafe { *data[i].as_ptr().add(byte_pos) };
+                sum ^= mult(coefficient, data_byte, &LOG_TABLE, &EXP_TABLE);
+            }
+            parity[j][byte_pos] = sum;
+        }
+    }
 }
 
 pub fn reconstruct(shards: &[Option<Vec<u8>>], k: usize, m: usize) -> Result<Vec<Vec<u8>>, ShardError> {
