@@ -149,7 +149,7 @@ pub fn reconstruct(shards: &[Option<Vec<u8>>], k: usize, m: usize) -> Result<Vec
     Ok(output)
 }
 
-pub fn verify(original: &[u8], recovered: &[Vec<u8>], k: usize) -> bool {
+pub fn verify(original: &[u8], recovered: &[Vec<u8>]) -> bool {
     let mut recovered_concat: Vec<u8> = Vec::with_capacity(recovered.len() * recovered[0].len());
     for shard in recovered {
         for s in shard {

@@ -385,7 +385,7 @@ mod tests {
     fn verify_identical_input() {
         let original: Vec<u8> = vec![1, 2, 3];
         let recovered: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3]];
-        assert!(verify(&original, &recovered, 3));
+        assert!(verify(&original, &recovered));
     }
 
     #[test]
@@ -393,14 +393,14 @@ mod tests {
         let original: Vec<u8> = vec![1, 2, 3];
         let recovered: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3], vec![0]];
         // k=3 means only first 3 shards are concatenated
-        assert!(verify(&original, &recovered, 3));
+        assert!(verify(&original, &recovered));
     }
 
     #[test]
     fn verify_different_content() {
         let original: Vec<u8> = vec![1, 2, 3];
         let recovered: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![4]];
-        assert!(!verify(&original, &recovered, 3));
+        assert!(!verify(&original, &recovered));
     }
 
     #[test]
@@ -409,7 +409,7 @@ mod tests {
         let recovered: Vec<Vec<u8>> = vec![vec![1], vec![2], vec![3]];
         // recovered_concat = 3 bytes, original = 5 bytes
         // Returns false because recovered can't hold all of original
-        assert!(!verify(&original, &recovered, 3));
+        assert!(!verify(&original, &recovered));
     }
 
     #[test]
@@ -432,7 +432,7 @@ mod tests {
         // Reconstruct with no losses
         let recovered = reconstruct(&all_shards, k, m).unwrap();
 
-        assert!(verify(&original_data, &recovered, k));
+        assert!(verify(&original_data, &recovered));
     }
 
     #[test]
@@ -458,7 +458,7 @@ mod tests {
 
         let recovered = reconstruct(&all_shards, k, m).unwrap();
 
-        assert!(verify(&original_data, &recovered, k));
+        assert!(verify(&original_data, &recovered));
     }
 
     #[test]
@@ -486,7 +486,7 @@ mod tests {
         let recovered = reconstruct(&all_shards, k, m).unwrap();
 
         // The corrupted data won't match original
-        assert!(!verify(&original_data, &recovered, k));
+        assert!(!verify(&original_data, &recovered));
     }
 
     // --- encode_hot tests ---

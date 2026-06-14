@@ -2,6 +2,7 @@
 name = "reed-solomon"
 version = "0.1.0"
 edition = "2024"
+autobenches = false
 
 [dependencies]
 
@@ -9,7 +10,7 @@ edition = "2024"
 criterion = "0.5"
 
 [[bin]]
-name = "bench"
+name = "throughput"
 path = "benches/throughput.rs"
 
 [[bench]]
