@@ -139,10 +139,25 @@ pub unsafe fn sum_bytes(bytes: &[u8]) -> u32 {
     total_sum
 }
 
-//#[cfg(target_arch = "aarch64")]
-// pub unsafe fn encode(data_shards: &[Vec<u8>], coeffs: &[u8], parity_len: usize) -> Vec<u8>
+#[cfg(target_arch = "aarch64")]
+pub unsafe fn encode(data_shards: &[Vec<u8>], coeffs: &[u8], parity_len: usize) -> Vec<u8> {
 // produce ONE parity shard from all data shards
 // parity[byte] = XOR over all shards s of: gf_mul(coeffs[s], data_shards[s][byte])
+    // create variables for parity and chunks
+    let mut parity: Vec<u8> = vec![0u8; parity_len];
+    let mut temp: Vec<u8> = vec![0u8; parity_len];
+
+    for shard in 0..data_shards.len() {
+        mult_into(&data_shards[shard], coeffs[shard], &mut temp);
+        for i in 0..parity_len {
+            parity[i] ^= temp[i]
+        }
+    }
+
+    parity
+}
+
+
 
 #[cfg(test)]
 mod tests {
