@@ -4,7 +4,7 @@ mod tests {
     #[cfg(target_arch = "aarch64")]
     use reed_solomon::simd::mult_into;
     #[cfg(target_arch = "aarch64")]
-    use reed_solomon::simd::sum_bytes;
+    use reed_solomon::simd::encode;
     use reed_solomon::field::{setup_tables, mult};
 
     const SETUP: ([u8; 256], [u8; 512]) = setup_tables();
@@ -53,18 +53,43 @@ mod tests {
         }
     }
 
+    /// Scalar oracle: dead simple, obviously correct.
+    /// parity[p] = XOR over all shards s of: gf_mul(coeffs[s], data_shards[s][p])
+    fn encode_scalar(data_shards: &[Vec<u8>], coeffs: &[u8]) -> Vec<u8> {
+        if data_shards.is_empty() {
+            return vec![];
+        }
+        let n = data_shards[0].len();
+        let mut parity = vec![0u8; n];
+        for p in 0..n {
+            for s in 0..data_shards.len() {
+                parity[p] ^= mult(coeffs[s], data_shards[s][p], &LOG_TABLE, &EXP_TABLE);
+            }
+        }
+        parity
+    }
+
     #[test]
     #[cfg(target_arch = "aarch64")]
-    fn test_sum_bytes() {
-        // small lengths: basic operation and tail handling
-        // large lengths: 1000+ triggers one flush, 5000 triggers several
-        for len in [0, 1, 15, 16, 17, 31, 100, 1000, 1024, 1025, 2000, 5000, 10000] {
-            let bytes: Vec<u8> = (0..len).map(|i| (i % 256) as u8).collect();
+    fn test_encode_vs_scalar() {
+        for num_shards in [1, 2, 3, 4, 8] {
+            for len in [0, 1, 15, 16, 17, 31, 32, 100, 1000] {
+                // Build deterministic data shards
+                let data_shards: Vec<Vec<u8>> = (0..num_shards)
+                    .map(|s| (0..len).map(|i| ((s * 17 + i * 13) & 0xFF) as u8).collect())
+                    .collect();
 
-            let expected: u32 = bytes.iter().map(|&b| b as u32).sum();
-            let result = unsafe { sum_bytes(&bytes) };
+                // Build coefficients
+                let coeffs: Vec<u8> = (0..num_shards).map(|s| (s as u8).wrapping_add(1)).collect();
 
-            assert_eq!(result, expected, "mismatch at len={}", len);
+                let expected = encode_scalar(&data_shards, &coeffs);
+                let got = unsafe { encode(&data_shards, &coeffs) };
+
+                assert_eq!(
+                    expected, got,
+                    "mismatch: shards={num_shards}, len={len}"
+                );
+            }
         }
     }
 }

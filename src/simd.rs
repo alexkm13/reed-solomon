@@ -103,57 +103,50 @@ pub unsafe fn mult_into(data: &[u8], c: u8, out: &mut [u8]) {
 }
 
 #[cfg(target_arch = "aarch64")]
-pub unsafe fn sum_bytes(bytes: &[u8]) -> u32 {
-    let n = bytes.len();
-    let chunks = n / 16;
-    let mut short: uint16x8_t = vdupq_n_u16(0); // for u16 lanes, quick storage
-    let mut long: uint32x4_t = vdupq_n_u32(0); // to flush the u16 lanes when there's a risk of
-                                               // wrapping
-
-    for i in 0..chunks {
-        let off = i * 16;
-        let v = vld1q_u8(bytes.as_ptr().add(off));
-        
-        short = vpadalq_u8(short, v); // pairwise add the u8 lanes into u16 lanes
-
-        // chunks overflow around 128, so we check around halfway to flush
-        if i % 64 == 63 { 
-            // flush into u32 lanes register
-            // then, refresh u16 lanes
-            long = vpadalq_u16(long, short);
-            short = vdupq_n_u16(0);
-        }
-    }
-    
-    // flush the remaining data into long so all sums are in one area
-    long = vpadalq_u16(long, short);
-    
-    // make it a scalar of u32 size
-    let mut total_sum = vaddvq_u32(long);
-    
-    // tail loop
-    for t in chunks * 16..n {
-        total_sum += bytes[t] as u32;
-    }
-
-    total_sum
-}
-
-#[cfg(target_arch = "aarch64")]
-pub unsafe fn encode(data_shards: &[Vec<u8>], coeffs: &[u8], parity_len: usize) -> Vec<u8> {
+pub unsafe fn encode(data_shards: &[Vec<u8>], coeffs: &[u8]) -> Vec<u8> {
 // produce ONE parity shard from all data shards
 // parity[byte] = XOR over all shards s of: gf_mul(coeffs[s], data_shards[s][byte])
-    // create variables for parity and chunks
-    let mut parity: Vec<u8> = vec![0u8; parity_len];
-    let mut temp: Vec<u8> = vec![0u8; parity_len];
-
-    for shard in 0..data_shards.len() {
-        mult_into(&data_shards[shard], coeffs[shard], &mut temp);
-        for i in 0..parity_len {
-            parity[i] ^= temp[i]
-        }
+    if data_shards.is_empty() {
+        return vec![];
     }
 
+    // create chunks count and n, along with parity vector
+    let n: usize = data_shards[0].len();
+    let chunks = n / 16;
+    let mut parity: Vec<u8> = vec![0u8; n];
+
+    // masking variable
+    let mask = vdupq_n_u8(0x0F);
+
+    for c in 0..chunks {
+        let off = c * 16;
+        // create a accumulator register 
+        let mut parity_acc = vdupq_n_u8(0);
+        for (s_idx, s) in data_shards.iter().enumerate() {
+            let v = vld1q_u8(s.as_ptr().add(off));
+            // create tables for each shard
+            let (t_lo_arr, t_hi_arr) = create_tables(coeffs[s_idx]);
+            let t_lo = vld1q_u8(t_lo_arr.as_ptr());
+            let t_hi = vld1q_u8(t_hi_arr.as_ptr());
+            // create lo and hi nibbles
+            let lo = vandq_u8(v, mask);
+            let hi = vshrq_n_u8::<4>(v);
+            // access table values at chunk location 
+            let value_lo = vqtbl1q_u8(t_lo, lo);
+            let value_hi = vqtbl1q_u8(t_hi, hi);
+            // xor these values (multiply)
+            let value_xor = veorq_u8(value_lo, value_hi);
+            // sum into parity shard
+            parity_acc = veorq_u8(parity_acc, value_xor);
+        }
+        vst1q_u8(parity.as_mut_ptr().add(off), parity_acc);
+    }
+    
+    for i in chunks*16..n {
+        for j in 0..data_shards.len() {
+            parity[i] ^= mult(data_shards[j][i], coeffs[j], &LOG_TABLE, &EXP_TABLE);
+        }
+    }
     parity
 }
 
