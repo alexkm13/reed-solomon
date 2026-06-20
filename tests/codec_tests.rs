@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use reed_solomon::codec::{split, encode, encode_hot, encode_hot_unsafe, reconstruct, verify, ShardError};
-    use reed_solomon::matrix::Matrix;
+    use reed_solomon::codec::{
+        ShardError, encode, reconstruct_hot, reconstruct_scalar, split, verify,
+    };
 
     #[test]
     fn evenly_divisible() {
@@ -113,7 +114,10 @@ mod tests {
         let parity1 = encode(&data_shards, m).unwrap();
         let parity2 = encode(&data_shards, m).unwrap();
 
-        assert_eq!(parity1, parity2, "Encoding same data twice should produce identical parity");
+        assert_eq!(
+            parity1, parity2,
+            "Encoding same data twice should produce identical parity"
+        );
     }
 
     #[test]
@@ -205,13 +209,18 @@ mod tests {
             all_shards.push(Some(shard.clone()));
         }
 
-        let recovered = reconstruct(&all_shards, k, m).unwrap();
+        let recovered = reconstruct_scalar(&all_shards, k, m).unwrap();
 
         for i in 0..k {
             assert_eq!(recovered[i], data_shards[i], "Data shard {} mismatch", i);
         }
         for i in 0..m {
-            assert_eq!(recovered[k + i], parity_shards[i], "Parity shard {} mismatch", i);
+            assert_eq!(
+                recovered[k + i],
+                parity_shards[i],
+                "Parity shard {} mismatch",
+                i
+            );
         }
     }
 
@@ -238,10 +247,14 @@ mod tests {
         // Lose data shard 1
         all_shards[1] = None;
 
-        let recovered = reconstruct(&all_shards, k, m).unwrap();
+        let recovered = reconstruct_scalar(&all_shards, k, m).unwrap();
 
         for i in 0..k {
-            assert_eq!(recovered[i], data_shards[i], "Data shard {} not recovered correctly", i);
+            assert_eq!(
+                recovered[i], data_shards[i],
+                "Data shard {} not recovered correctly",
+                i
+            );
         }
     }
 
@@ -268,13 +281,18 @@ mod tests {
         // Lose parity shard 0 (index k)
         all_shards[k] = None;
 
-        let recovered = reconstruct(&all_shards, k, m).unwrap();
+        let recovered = reconstruct_scalar(&all_shards, k, m).unwrap();
 
         for i in 0..k {
             assert_eq!(recovered[i], data_shards[i], "Data shard {} mismatch", i);
         }
         for i in 0..m {
-            assert_eq!(recovered[k + i], parity_shards[i], "Parity shard {} not recovered correctly", i);
+            assert_eq!(
+                recovered[k + i],
+                parity_shards[i],
+                "Parity shard {} not recovered correctly",
+                i
+            );
         }
     }
 
@@ -299,14 +317,18 @@ mod tests {
         }
 
         // Lose m shards (maximum recoverable)
-        all_shards[0] = None;  // data shard 0
-        all_shards[2] = None;  // data shard 2
-        all_shards[k + 1] = None;  // parity shard 1
+        all_shards[0] = None; // data shard 0
+        all_shards[2] = None; // data shard 2
+        all_shards[k + 1] = None; // parity shard 1
 
-        let recovered = reconstruct(&all_shards, k, m).unwrap();
+        let recovered = reconstruct_scalar(&all_shards, k, m).unwrap();
 
         for i in 0..k {
-            assert_eq!(recovered[i], data_shards[i], "Data shard {} not recovered correctly", i);
+            assert_eq!(
+                recovered[i], data_shards[i],
+                "Data shard {} not recovered correctly",
+                i
+            );
         }
     }
 
@@ -335,7 +357,7 @@ mod tests {
         all_shards[1] = None;
         all_shards[2] = None;
 
-        let result = reconstruct(&all_shards, k, m);
+        let result = reconstruct_scalar(&all_shards, k, m);
 
         assert!(matches!(result, Err(ShardError::UnrecoverableError)));
     }
@@ -344,7 +366,8 @@ mod tests {
     fn reconstruct_end_to_end() {
         let k = 4;
         let m = 2;
-        let original_data: Vec<u8> = b"Hello, Reed-Solomon! This is a test of erasure coding.".to_vec();
+        let original_data: Vec<u8> =
+            b"Hello, Reed-Solomon! This is a test of erasure coding.".to_vec();
 
         // Split into data shards
         let data_shards = split(&original_data, k);
@@ -362,11 +385,11 @@ mod tests {
         }
 
         // Simulate losing some shards
-        all_shards[1] = None;  // lose data shard 1
-        all_shards[k] = None;  // lose parity shard 0
+        all_shards[1] = None; // lose data shard 1
+        all_shards[k] = None; // lose parity shard 0
 
         // Reconstruct
-        let recovered = reconstruct(&all_shards, k, m).unwrap();
+        let recovered = reconstruct_scalar(&all_shards, k, m).unwrap();
 
         // Reassemble and verify
         let mut reconstructed_data: Vec<u8> = Vec::new();
@@ -430,7 +453,7 @@ mod tests {
         }
 
         // Reconstruct with no losses
-        let recovered = reconstruct(&all_shards, k, m).unwrap();
+        let recovered = reconstruct_scalar(&all_shards, k, m).unwrap();
 
         assert!(verify(&original_data, &recovered));
     }
@@ -456,7 +479,7 @@ mod tests {
         all_shards[0] = None;
         all_shards[k + 1] = None;
 
-        let recovered = reconstruct(&all_shards, k, m).unwrap();
+        let recovered = reconstruct_scalar(&all_shards, k, m).unwrap();
 
         assert!(verify(&original_data, &recovered));
     }
@@ -483,95 +506,142 @@ mod tests {
             shard[0] ^= 0x01;
         }
 
-        let recovered = reconstruct(&all_shards, k, m).unwrap();
+        let recovered = reconstruct_scalar(&all_shards, k, m).unwrap();
 
         // The corrupted data won't match original
         assert!(!verify(&original_data, &recovered));
     }
 
-    // --- encode_hot tests ---
+    // --- reconstruct_hot correctness tests ---
 
     #[test]
-    fn encode_hot_matches_encode() {
+    fn reconstruct_hot_matches_scalar_no_erasures() {
         let k = 4;
         let m = 2;
-        let shard_len = 16;
+        let shard_len = 64;
 
-        // Create data shards
         let data_shards: Vec<Vec<u8>> = (0..k)
-            .map(|i| (0..shard_len).map(|j| ((i * shard_len + j) * 7 + 13) as u8).collect())
+            .map(|i| {
+                (0..shard_len)
+                    .map(|j| ((i * 17 + j * 31) % 256) as u8)
+                    .collect()
+            })
             .collect();
 
-        // Get expected result from encode
-        let expected = encode(&data_shards, m).unwrap();
+        let parity_shards = encode(&data_shards, m).unwrap();
 
-        // Manually extract coefficients from vand_fix (bottom m rows)
-        let f = Matrix::vand_fix(m, k).unwrap();
-        let coeffs = &f.elements[k * k..(k + m) * k];
+        let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+        for shard in &data_shards {
+            all_shards.push(Some(shard.clone()));
+        }
+        for shard in &parity_shards {
+            all_shards.push(Some(shard.clone()));
+        }
 
-        // Allocate parity buffer
-        let mut parity: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
+        let scalar_result = reconstruct_scalar(&all_shards, k, m).unwrap();
+        let hot_result = unsafe { reconstruct_hot(&all_shards, k, m).unwrap() };
 
-        // Call encode_hot
-        encode_hot(coeffs, &data_shards, &mut parity, k, m);
-
-        // Verify it matches encode
-        assert_eq!(parity, expected, "encode_hot should produce same result as encode");
-    }
-
-    #[test]
-    fn encode_hot_matches_encode_various_sizes() {
-        for (k, m, shard_len) in [(2, 1, 8), (3, 2, 10), (4, 3, 32), (5, 4, 64)] {
-            // Create data shards with varied content
-            let data_shards: Vec<Vec<u8>> = (0..k)
-                .map(|i| (0..shard_len).map(|j| (i ^ j) as u8).collect())
-                .collect();
-
-            // Get expected from encode
-            let expected = encode(&data_shards, m).unwrap();
-
-            // Manual setup: extract bottom m rows of vand_fix
-            let f = Matrix::vand_fix(m, k).unwrap();
-            let coeffs = &f.elements[k * k..(k + m) * k];
-
-            // Allocate parity buffer and call encode_hot
-            let mut parity: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
-            encode_hot(coeffs, &data_shards, &mut parity, k, m);
-
+        // reconstruct_hot only returns k data shards, scalar returns k+m
+        for i in 0..k {
             assert_eq!(
-                parity, expected,
-                "encode_hot mismatch for k={}, m={}, shard_len={}",
-                k, m, shard_len
+                hot_result[i], scalar_result[i],
+                "reconstruct_hot mismatch at data shard {} (no erasures)",
+                i
             );
         }
     }
 
     #[test]
-    fn encode_hot_unsafe_matches_encode_hot() {
-        for (k, m, shard_len) in [(2, 1, 8), (3, 2, 10), (4, 2, 16), (4, 3, 32), (5, 4, 64)] {
-            // Create data shards
+    fn reconstruct_hot_matches_scalar_with_erasures() {
+        let k = 8;
+        let m = 2;
+
+        // Test multiple shard sizes including those that exercise SIMD tail handling
+        for shard_len in [16, 32, 33, 64, 100, 128, 256, 1024] {
             let data_shards: Vec<Vec<u8>> = (0..k)
-                .map(|i| (0..shard_len).map(|j| ((i * 17 + j * 31) % 256) as u8).collect())
+                .map(|i| {
+                    (0..shard_len)
+                        .map(|j| ((i * 17 + j * 31 + shard_len) % 256) as u8)
+                        .collect()
+                })
                 .collect();
 
-            // Extract coefficients from vand_fix
-            let f = Matrix::vand_fix(m, k).unwrap();
-            let coeffs = &f.elements[k * k..(k + m) * k];
+            let parity_shards = encode(&data_shards, m).unwrap();
 
-            // Run encode_hot (safe version)
-            let mut parity_safe: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
-            encode_hot(coeffs, &data_shards, &mut parity_safe, k, m);
+            let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+            for shard in &data_shards {
+                all_shards.push(Some(shard.clone()));
+            }
+            for shard in &parity_shards {
+                all_shards.push(Some(shard.clone()));
+            }
 
-            // Run encode_hot_unsafe
-            let mut parity_unsafe: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; m];
-            encode_hot_unsafe(coeffs, &data_shards, &mut parity_unsafe, k, m);
+            // Erase first 2 data shards
+            all_shards[0] = None;
+            all_shards[1] = None;
 
-            // Verify byte-identical output
-            assert_eq!(
-                parity_unsafe, parity_safe,
-                "encode_hot_unsafe mismatch for k={}, m={}, shard_len={}",
-                k, m, shard_len
-            );
+            let scalar_result = reconstruct_scalar(&all_shards, k, m).unwrap();
+            let hot_result = unsafe { reconstruct_hot(&all_shards, k, m).unwrap() };
+
+            // Verify data shards are byte-identical
+            for i in 0..k {
+                assert_eq!(
+                    hot_result[i], scalar_result[i],
+                    "reconstruct_hot mismatch at data shard {} for shard_len={}",
+                    i, shard_len
+                );
+            }
+
+            // Also verify against original data
+            for i in 0..k {
+                assert_eq!(
+                    hot_result[i], data_shards[i],
+                    "reconstruct_hot failed to recover original data shard {} for shard_len={}",
+                    i, shard_len
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn reconstruct_hot_matches_scalar_various_configs() {
+        // Test various k, m configurations
+        for (k, m) in [(4, 2), (8, 2), (8, 4), (16, 4)] {
+            let shard_len = 128;
+
+            let data_shards: Vec<Vec<u8>> = (0..k)
+                .map(|i| {
+                    (0..shard_len)
+                        .map(|j| ((i ^ j) % 256) as u8)
+                        .collect()
+                })
+                .collect();
+
+            let parity_shards = encode(&data_shards, m).unwrap();
+
+            let mut all_shards: Vec<Option<Vec<u8>>> = Vec::new();
+            for shard in &data_shards {
+                all_shards.push(Some(shard.clone()));
+            }
+            for shard in &parity_shards {
+                all_shards.push(Some(shard.clone()));
+            }
+
+            // Erase m shards (maximum recoverable)
+            for i in 0..m {
+                all_shards[i] = None;
+            }
+
+            let scalar_result = reconstruct_scalar(&all_shards, k, m).unwrap();
+            let hot_result = unsafe { reconstruct_hot(&all_shards, k, m).unwrap() };
+
+            for i in 0..k {
+                assert_eq!(
+                    hot_result[i], scalar_result[i],
+                    "reconstruct_hot mismatch for k={}, m={} at shard {}",
+                    k, m, i
+                );
+            }
         }
     }
 }

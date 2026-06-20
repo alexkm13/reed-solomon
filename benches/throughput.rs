@@ -1,4 +1,4 @@
-use reed_solomon::codec::{split, encode, reconstruct};
+use reed_solomon::codec::{encode, reconstruct_scalar, split};
 use std::time::Instant;
 
 const DATA_SIZE: usize = 1024 * 1024; // 1 MB
@@ -41,7 +41,7 @@ fn bench_reconstruct() -> f64 {
     let start = Instant::now();
     for _ in 0..ITERATIONS {
         let shards = all_shards.clone();
-        let _ = reconstruct(&shards, K, M).unwrap();
+        let _ = reconstruct_scalar(&shards, K, M).unwrap();
     }
     let elapsed = start.elapsed();
 
@@ -52,8 +52,13 @@ fn bench_reconstruct() -> f64 {
 
 fn main() {
     println!("Benchmark baseline:");
-    println!("  Data size: {} MB, K={}, M={}, Iterations={}",
-             DATA_SIZE / 1_000_000, K, M, ITERATIONS);
+    println!(
+        "  Data size: {} MB, K={}, M={}, Iterations={}",
+        DATA_SIZE / 1_000_000,
+        K,
+        M,
+        ITERATIONS
+    );
     println!();
 
     let encode_throughput = bench_encode();

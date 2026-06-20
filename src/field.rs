@@ -18,7 +18,7 @@ pub fn mult(a: u8, b: u8, log: &[u8; 256], exp: &[u8; 512]) -> u8 {
         sum_log -= NW_MINUS_1;
     }
 
-    exp[sum_log as usize] 
+    exp[sum_log as usize]
 }
 
 // inverse of an element a (1/a)
@@ -28,23 +28,29 @@ pub fn inv(a: u8, log: &[u8; 256], exp: &[u8; 512]) -> u8 {
 
 // divides between two elements in a field
 pub fn div(a: u8, b: u8, log: &[u8; 256], exp: &[u8; 512]) -> u8 {
-    let mut diff_log: i16; 
+    let mut diff_log: i16;
     if a == 0 {
         return 0_u8;
     }
 
-    if b == 0 { panic!("Cannot divide by zero.") }
+    if b == 0 {
+        panic!("Cannot divide by zero.")
+    }
 
     diff_log = log[a as usize] as i16 - log[b as usize] as i16;
     if diff_log < 0 {
         diff_log += (NW_MINUS_1) as i16;
     }
 
-    exp[diff_log as usize] 
+    exp[diff_log as usize]
 }
 pub fn pow(a: u8, b: u8, log: &[u8; 256], exp: &[u8; 512]) -> u8 {
-    if b == 0 { return 1; }
-    if a == 0 { return 0; }   
+    if b == 0 {
+        return 1;
+    }
+    if a == 0 {
+        return 0;
+    }
 
     exp[(log[a as usize] as usize * b as usize) % 255]
 }
@@ -57,8 +63,9 @@ pub const fn setup_tables() -> ([u8; 256], [u8; 512]) {
     while count < 255 {
         exp[count as usize] = b as u8;
         log[b as usize] = count as u8;
-        b <<= 1; 
-        if b & 0x100 != 0 { // checks for overflow by seeing if there's  
+        b <<= 1;
+        if b & 0x100 != 0 {
+            // checks for overflow by seeing if there's
             b ^= 0x11D;
         }
         count += 1;

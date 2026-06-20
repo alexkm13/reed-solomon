@@ -16,3 +16,7 @@ path = "benches/throughput.rs"
 [[bench]]
 name = "encode_bench"
 harness = false
+
+[[bench]]
+name = "reconstruct_bench"
+harness = false

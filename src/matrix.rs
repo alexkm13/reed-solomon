@@ -1,9 +1,8 @@
-use crate::field::{mult, add, inv, setup_tables, pow};
+use crate::field::{add, inv, mult, pow, setup_tables};
 
 const SETUP: ([u8; 256], [u8; 512]) = setup_tables();
 const LOG_TABLE: [u8; 256] = SETUP.0;
 const EXP_TABLE: [u8; 512] = SETUP.1;
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Matrix {
@@ -21,7 +20,11 @@ pub enum MatrixError {
 impl Matrix {
     pub fn vand_fix(m: usize, k: usize) -> Result<Matrix, MatrixError> {
         let mat: Matrix = Matrix::vandermonde(k + m, k);
-        let k_mat: Matrix = Matrix{col: k, row: k, elements: mat.elements[0 .. k * k].to_vec()};
+        let k_mat: Matrix = Matrix {
+            col: k,
+            row: k,
+            elements: mat.elements[0..k * k].to_vec(),
+        };
         let mut invert: Matrix = k_mat.clone();
         invert.inverse()?;
         let res = mat.multiplication(&invert)?;
@@ -34,7 +37,11 @@ impl Matrix {
                 res.push(pow(r as u8, c as u8, &LOG_TABLE, &EXP_TABLE));
             }
         }
-        let mat: Matrix = Matrix{col: k, row: m, elements: res};
+        let mat: Matrix = Matrix {
+            col: k,
+            row: m,
+            elements: res,
+        };
         return mat;
     }
 
@@ -42,7 +49,7 @@ impl Matrix {
         let mut found: bool = false;
         for k in 0..std::cmp::min(self.row, self.col) {
             if self.elements[k * self.col + k] == 0 {
-                for i in (k+1)..self.row {
+                for i in (k + 1)..self.row {
                     if self.elements[i * self.col + k] != 0 {
                         self.swap_rows(k, i);
                         found = true;
@@ -56,12 +63,19 @@ impl Matrix {
                 }
             }
             if self.elements[k * self.col + k] != 1 {
-                self.scale_row(inv(self.elements[k * self.col + k], &LOG_TABLE, &EXP_TABLE), k);
+                self.scale_row(
+                    inv(self.elements[k * self.col + k], &LOG_TABLE, &EXP_TABLE),
+                    k,
+                );
             }
             for n in 0..self.row {
-                if n == k { continue; }
+                if n == k {
+                    continue;
+                }
                 let factor = self.elements[n * self.col + k];
-                if factor == 0 {continue;}
+                if factor == 0 {
+                    continue;
+                }
                 self.add_scaled_row(factor, k, n);
             }
         }
@@ -69,13 +83,15 @@ impl Matrix {
     }
 
     pub fn inverse(&mut self) -> Result<(), MatrixError> {
-        if self.row != self.col {return Err(MatrixError::DimensionMismatch)};
+        if self.row != self.col {
+            return Err(MatrixError::DimensionMismatch);
+        };
 
         let mut aug_vec: Vec<u8> = Vec::new();
         let mut identity: Vec<u8> = Vec::new();
 
         for i in 0..self.row {
-            aug_vec.extend(&self.elements[i * self.col .. (i + 1) * self.col]);
+            aug_vec.extend(&self.elements[i * self.col..(i + 1) * self.col]);
             for n in 0..self.col {
                 if n != i {
                     identity.push(0);
@@ -87,18 +103,25 @@ impl Matrix {
             identity.clear();
         }
 
-        let mut m = Matrix{row: self.row, col: self.col * 2, elements: aug_vec};
+        let mut m = Matrix {
+            row: self.row,
+            col: self.col * 2,
+            elements: aug_vec,
+        };
         m.elimination()?;
-        
+
         for r in 0..self.row {
-           self.elements[r * self.col .. (r + 1) * self.col].copy_from_slice(&m.elements[r * 2 * self.col + self.col .. (r + 1) * 2 * self.col]);        
+            self.elements[r * self.col..(r + 1) * self.col]
+                .copy_from_slice(&m.elements[r * 2 * self.col + self.col..(r + 1) * 2 * self.col]);
         }
 
         Ok(())
     }
 
     pub fn multiplication(&self, other: &Matrix) -> Result<Matrix, MatrixError> {
-        if self.col != other.row {return Err(MatrixError::DimensionMismatch);};
+        if self.col != other.row {
+            return Err(MatrixError::DimensionMismatch);
+        };
 
         let mut result: Vec<u8> = Vec::new();
         let mut sum: u8 = 0;
@@ -106,7 +129,12 @@ impl Matrix {
         for r in 0..self.row {
             for c in 0..other.col {
                 for i in 0..other.row {
-                    product = mult(self.elements[r * self.col + i], other.elements[i * other.col + c], &LOG_TABLE, &EXP_TABLE); 
+                    product = mult(
+                        self.elements[r * self.col + i],
+                        other.elements[i * other.col + c],
+                        &LOG_TABLE,
+                        &EXP_TABLE,
+                    );
                     sum ^= product;
                 }
 
@@ -114,15 +142,25 @@ impl Matrix {
                 sum = 0;
             }
         }
-       let new_res: Matrix = Matrix{row: self.row, col: other.col, elements: result};
-       Ok(new_res)
+        let new_res: Matrix = Matrix {
+            row: self.row,
+            col: other.col,
+            elements: result,
+        };
+        Ok(new_res)
     }
 
     pub fn add_scaled_row(&mut self, scalar: u8, source_row: usize, target_row: usize) -> () {
-       for i in 0..self.col {
-           let val = mult(self.elements[source_row * self.col + i], scalar, &LOG_TABLE, &EXP_TABLE);
-           self.elements[target_row * self.col + i] = add(val, self.elements[target_row * self.col + i]);
-       } 
+        for i in 0..self.col {
+            let val = mult(
+                self.elements[source_row * self.col + i],
+                scalar,
+                &LOG_TABLE,
+                &EXP_TABLE,
+            );
+            self.elements[target_row * self.col + i] =
+                add(val, self.elements[target_row * self.col + i]);
+        }
     }
 
     pub fn scale_row(&mut self, scalar: u8, row: usize) -> () {
@@ -133,17 +171,18 @@ impl Matrix {
 
     pub fn add_rows(&mut self, base_row: usize, target_row: usize) -> () {
         for i in 0..self.col {
-            let val = add(self.elements[base_row * self.col + i], self.elements[target_row * self.col + i]);
+            let val = add(
+                self.elements[base_row * self.col + i],
+                self.elements[target_row * self.col + i],
+            );
             self.elements[(target_row * self.col) + i] = val;
         }
     }
 
     pub fn swap_rows(&mut self, base_row: usize, target_row: usize) -> () {
         for i in 0..self.col {
-            self.elements.swap((base_row * self.col) + i, (target_row * self.col) + i);
+            self.elements
+                .swap((base_row * self.col) + i, (target_row * self.col) + i);
         }
     }
-} 
-
-
-
+}

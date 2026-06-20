@@ -7,21 +7,10 @@ mod tests {
         let mut m = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                1, 0, 0,
-                0, 1, 0,
-                0, 0, 1,
-            ],
+            elements: vec![1, 0, 0, 0, 1, 0, 0, 0, 1],
         };
         m.elimination().unwrap();
-        assert_eq!(
-            m.elements,
-            vec![
-                1, 0, 0,
-                0, 1, 0,
-                0, 0, 1,
-            ]
-        );
+        assert_eq!(m.elements, vec![1, 0, 0, 0, 1, 0, 0, 0, 1,]);
     }
 
     #[test]
@@ -29,11 +18,7 @@ mod tests {
         let mut m = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                1, 2, 3,
-                1, 2, 3,
-                4, 5, 6,
-            ],
+            elements: vec![1, 2, 3, 1, 2, 3, 4, 5, 6],
         };
         assert_eq!(m.elimination(), Err(MatrixError::NotInvertible));
     }
@@ -44,22 +29,11 @@ mod tests {
         let mut m = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                0, 1, 0,
-                1, 0, 0,
-                0, 0, 1,
-            ],
+            elements: vec![0, 1, 0, 1, 0, 0, 0, 0, 1],
         };
         m.elimination().unwrap();
         // After elimination should be identity
-        assert_eq!(
-            m.elements,
-            vec![
-                1, 0, 0,
-                0, 1, 0,
-                0, 0, 1,
-            ]
-        );
+        assert_eq!(m.elements, vec![1, 0, 0, 0, 1, 0, 0, 0, 1,]);
     }
 
     #[test]
@@ -69,10 +43,7 @@ mod tests {
         let mut m = Matrix {
             row: 2,
             col: 2,
-            elements: vec![
-                2, 0,
-                0, 1,
-            ],
+            elements: vec![2, 0, 0, 1],
         };
         m.elimination().unwrap();
         assert_eq!(m.elements[0], 1);
@@ -84,10 +55,7 @@ mod tests {
         let mut m = Matrix {
             row: 2,
             col: 2,
-            elements: vec![
-                2, 3,
-                4, 5,
-            ],
+            elements: vec![2, 3, 4, 5],
         };
         let result = m.elimination();
         // If invertible, diagonal should be 1s
@@ -103,11 +71,7 @@ mod tests {
         let mut m = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                0, 2, 1,
-                3, 0, 4,
-                1, 5, 0,
-            ],
+            elements: vec![0, 2, 1, 3, 0, 4, 1, 5, 0],
         };
         let result = m.elimination();
         if result.is_ok() {
@@ -125,21 +89,10 @@ mod tests {
         let mut m = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                1, 0, 0,
-                0, 1, 0,
-                0, 0, 1,
-            ],
+            elements: vec![1, 0, 0, 0, 1, 0, 0, 0, 1],
         };
         m.inverse().unwrap();
-        assert_eq!(
-            m.elements,
-            vec![
-                1, 0, 0,
-                0, 1, 0,
-                0, 0, 1,
-            ]
-        );
+        assert_eq!(m.elements, vec![1, 0, 0, 0, 1, 0, 0, 0, 1,]);
     }
 
     #[test]
@@ -148,10 +101,7 @@ mod tests {
         let mut m = Matrix {
             row: 2,
             col: 2,
-            elements: vec![
-                0, 0,
-                1, 2,
-            ],
+            elements: vec![0, 0, 1, 2],
         };
         assert_eq!(m.inverse(), Err(MatrixError::NotInvertible));
     }
@@ -161,17 +111,14 @@ mod tests {
         let mut m = Matrix {
             row: 2,
             col: 3,
-            elements: vec![
-                1, 2, 3,
-                4, 5, 6,
-            ],
+            elements: vec![1, 2, 3, 4, 5, 6],
         };
         assert_eq!(m.inverse(), Err(MatrixError::DimensionMismatch));
     }
 
     #[test]
     fn inverse_2x2_verify_product_is_identity() {
-        use reed_solomon::field::{mult, add, setup_tables};
+        use reed_solomon::field::{add, mult, setup_tables};
         let (log, exp) = setup_tables();
 
         // Original matrix
@@ -187,10 +134,14 @@ mod tests {
         // Compute A * A^-1, should be identity
         // [a b]   [e f]   [ae+bg  af+bh]
         // [c d] * [g h] = [ce+dg  cf+dh]
-        let a = original[0]; let b = original[1];
-        let c = original[2]; let d = original[3];
-        let e = m.elements[0]; let f = m.elements[1];
-        let g = m.elements[2]; let h = m.elements[3];
+        let a = original[0];
+        let b = original[1];
+        let c = original[2];
+        let d = original[3];
+        let e = m.elements[0];
+        let f = m.elements[1];
+        let g = m.elements[2];
+        let h = m.elements[3];
 
         let r00 = add(mult(a, e, &log, &exp), mult(b, g, &log, &exp));
         let r01 = add(mult(a, f, &log, &exp), mult(b, h, &log, &exp));
@@ -211,20 +162,12 @@ mod tests {
         let a = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                1, 2, 3,
-                4, 5, 6,
-                7, 8, 9,
-            ],
+            elements: vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
         };
         let identity = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                1, 0, 0,
-                0, 1, 0,
-                0, 0, 1,
-            ],
+            elements: vec![1, 0, 0, 0, 1, 0, 0, 0, 1],
         };
         let result = a.multiplication(&identity).unwrap();
         assert_eq!(result.elements, a.elements);
@@ -236,20 +179,12 @@ mod tests {
         let a = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                1, 2, 3,
-                4, 5, 6,
-                7, 8, 9,
-            ],
+            elements: vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
         };
         let identity = Matrix {
             row: 3,
             col: 3,
-            elements: vec![
-                1, 0, 0,
-                0, 1, 0,
-                0, 0, 1,
-            ],
+            elements: vec![1, 0, 0, 0, 1, 0, 0, 0, 1],
         };
         let result = identity.multiplication(&a).unwrap();
         assert_eq!(result.elements, a.elements);
@@ -261,18 +196,12 @@ mod tests {
         let a = Matrix {
             row: 2,
             col: 3,
-            elements: vec![
-                1, 2, 3,
-                4, 5, 6,
-            ],
+            elements: vec![1, 2, 3, 4, 5, 6],
         };
         let b = Matrix {
             row: 2,
             col: 2,
-            elements: vec![
-                1, 2,
-                3, 4,
-            ],
+            elements: vec![1, 2, 3, 4],
         };
         assert_eq!(a.multiplication(&b), Err(MatrixError::DimensionMismatch));
     }
@@ -328,7 +257,11 @@ mod tests {
         a_inv.inverse().unwrap();
 
         let result = a.multiplication(&a_inv).unwrap();
-        assert_eq!(result.elements, vec![1, 0, 0, 1], "A * A^-1 should be identity");
+        assert_eq!(
+            result.elements,
+            vec![1, 0, 0, 1],
+            "A * A^-1 should be identity"
+        );
     }
 
     // ===== Vandermonde tests =====
@@ -369,7 +302,13 @@ mod tests {
         // V[i][1] = i^1 = i
         let v = Matrix::vandermonde(5, 3);
         for r in 0..5 {
-            assert_eq!(v.elements[r * 3 + 1], r as u8, "V[{}][1] should be {}", r, r);
+            assert_eq!(
+                v.elements[r * 3 + 1],
+                r as u8,
+                "V[{}][1] should be {}",
+                r,
+                r
+            );
         }
     }
 
@@ -387,7 +326,10 @@ mod tests {
         };
 
         // Should not error - Vandermonde matrices with distinct elements are invertible
-        assert!(top.inverse().is_ok(), "Top k×k of Vandermonde should be invertible");
+        assert!(
+            top.inverse().is_ok(),
+            "Top k×k of Vandermonde should be invertible"
+        );
     }
 
     // ===== vand_fix tests =====
@@ -399,12 +341,12 @@ mod tests {
         let v = Matrix::vand_fix(2, 3).unwrap();
 
         // Top 3×3 should be identity
-        let expected_identity = vec![
-            1, 0, 0,
-            0, 1, 0,
-            0, 0, 1,
-        ];
-        assert_eq!(&v.elements[0..9], &expected_identity[..], "Top k×k should be identity");
+        let expected_identity = vec![1, 0, 0, 0, 1, 0, 0, 0, 1];
+        assert_eq!(
+            &v.elements[0..9],
+            &expected_identity[..],
+            "Top k×k should be identity"
+        );
     }
 
     #[test]

@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
+    use reed_solomon::field::{mult, setup_tables};
     use reed_solomon::simd::build_tables;
     #[cfg(target_arch = "aarch64")]
-    use reed_solomon::simd::mult_into;
-    #[cfg(target_arch = "aarch64")]
     use reed_solomon::simd::encode;
-    use reed_solomon::field::{setup_tables, mult};
+    #[cfg(target_arch = "aarch64")]
+    use reed_solomon::simd::mult_into;
 
     const SETUP: ([u8; 256], [u8; 512]) = setup_tables();
     const LOG_TABLE: [u8; 256] = SETUP.0;
@@ -15,9 +15,9 @@ mod tests {
     fn build_tables_basic() {
         for c in 1..=255u8 {
             let (hi, lo) = build_tables(c);
-            assert_eq!(lo[0], 0);              // c * 0 = 0
-            assert_eq!(lo[1], c);              // c * 1 = c
-            assert_eq!(hi[1], mult(c, 16, &LOG_TABLE, &EXP_TABLE));  // c * (1<<4)
+            assert_eq!(lo[0], 0); // c * 0 = 0
+            assert_eq!(lo[1], c); // c * 1 = c
+            assert_eq!(hi[1], mult(c, 16, &LOG_TABLE, &EXP_TABLE)); // c * (1<<4)
         }
     }
     #[test]
@@ -47,7 +47,11 @@ mod tests {
                 // compare against scalar mult for each byte
                 for i in 0..len {
                     let expected = mult(c, data[i], &LOG_TABLE, &EXP_TABLE);
-                    assert_eq!(out[i], expected, "mismatch at c={:#x}, len={}, i={}", c, len, i);
+                    assert_eq!(
+                        out[i], expected,
+                        "mismatch at c={:#x}, len={}, i={}",
+                        c, len, i
+                    );
                 }
             }
         }
@@ -85,10 +89,7 @@ mod tests {
                 let expected = encode_scalar(&data_shards, &coeffs);
                 let got = unsafe { encode(&data_shards, &coeffs) };
 
-                assert_eq!(
-                    expected, got,
-                    "mismatch: shards={num_shards}, len={len}"
-                );
+                assert_eq!(expected, got, "mismatch: shards={num_shards}, len={len}");
             }
         }
     }
