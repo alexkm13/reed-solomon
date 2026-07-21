@@ -1,4 +1,6 @@
-# Reed-Solomon Encoder Benchmarks
+# Reed-Solomon Benchmarks
+
+# Reed-Solomon Encode Benchmarks
 
 ## Setup
 
@@ -114,10 +116,71 @@ The scalar kernel uses 256-entry LOG/EXP tables (768 bytes total). At 256 KB sha
 
 SIMD avoids this: `vqtbl1q_u8` uses 16-byte tables per coefficient (128 bytes for k=8). Small enough to stay hot in L1/registers throughout the encode.
 
+---
+
+# Reed-Solomon Reconstruct Benchmarks
+
+## Results
+
+| Shard Size | Working Set | Scalar | SIMD | Speedup |
+|------------|-------------|--------|------|---------|
+| 1 KB       | 8 KB        | 93 MiB/s  | **1.4 GiB/s** | 15x |
+| 4 KB       | 32 KB       | 97 MiB/s  | **2.2 GiB/s** | 23x |
+| 16 KB      | 128 KB      | 97 MiB/s  | **2.5 GiB/s** | 26x |
+| 64 KB      | 512 KB      | 98 MiB/s  | **2.5 GiB/s** | 26x |
+| 256 KB     | 2 MB        | 86 MiB/s  | **2.5 GiB/s** | 30x |
+| 1 MB       | 8 MB        | 92 MiB/s  | **2.2 GiB/s** | 25x |
+| 4 MB       | 32 MB       | 79 MiB/s  | **2.3 GiB/s** | 30x |
+
+**Peak**: 2.5 GiB/s at 16–256 KB shards
+
+## Why Reconstruct is Slower Than Encode (k² vs k)
+
+Reconstruct throughput peaks at 2.5 GiB/s vs encode's 17.6 GiB/s—a 7x difference. This isn't a bug; it's algorithmic complexity.
+
+### Encode: O(k) per byte
+
+For each parity byte, encode computes:
+
+```
+parity[i] = Σ (coeff[j] * data[j][i])  for j in 0..k
+```
+
+That's **k multiplications** per output byte (k=8 in our config). The parity matrix has m rows (m=2), so total work per byte position is `m × k = 16` GF multiplies.
+
+### Reconstruct: O(k²) per byte
+
+Reconstruction requires inverting a k×k submatrix of the Vandermonde matrix, then multiplying:
+
+```
+for each output shard i in 0..k:
+    output[i][byte] = Σ (inv[i][j] * survivor[j][byte])  for j in 0..k
+```
+
+That's **k² multiplications** per byte position (k=8 → 64 GF multiplies). The inner loop runs k times for each of k output shards.
+
+### The Math
+
+| Operation | GF mults per byte | Ratio |
+|-----------|-------------------|-------|
+| Encode    | m × k = 16        | 1x    |
+| Reconstruct | k² = 64         | 4x    |
+
+Theoretical slowdown: 4x. Observed: ~7x. The extra overhead comes from:
+
+1. **Matrix inversion** — computed once per reconstruct, but adds latency
+2. **Indirect addressing** — survivor indices require extra lookups
+3. **More table pressure** — k² coefficients (64) vs m×k coefficients (16)
+
+### Why This Matters
+
+Reed-Solomon is designed for the common case: encode once, rarely reconstruct. The k² cost only hits when shards are actually lost. A storage system reading intact data pays nothing; only recovery triggers the expensive path.
+
 ## Reproducing
 
 ```bash
-cargo bench --bench encode_bench
+cargo bench --bench encode_bench      # Encode benchmarks
+cargo bench --bench reconstruct_bench # Reconstruct benchmarks
 ```
 
 Generates HTML reports in `target/criterion/`.

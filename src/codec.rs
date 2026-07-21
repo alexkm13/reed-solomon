@@ -65,6 +65,33 @@ pub fn encode(data_shards: &[Vec<u8>], m: usize) -> Result<Vec<Vec<u8>>, MatrixE
     Ok(parity_shards)
 }
 
+/// Scalar encode for benchmarking - writes parity shards in place
+pub fn encode_hot(
+    coeffs: &[u8],
+    data_shards: &[Vec<u8>],
+    parity: &mut [Vec<u8>],
+    k: usize,
+    m: usize,
+) {
+    let shard_len = data_shards[0].len();
+
+    // For each parity shard
+    for p in 0..m {
+        // For each byte position
+        for byte_pos in 0..shard_len {
+            let mut sum: u8 = 0;
+            // Sum over all data shards: coeff[p,j] * data_shards[j][byte_pos]
+            for j in 0..k {
+                sum = field::add(
+                    sum,
+                    mult(coeffs[p * k + j], data_shards[j][byte_pos], &LOG_TABLE, &EXP_TABLE),
+                );
+            }
+            parity[p][byte_pos] = sum;
+        }
+    }
+}
+
 pub unsafe fn reconstruct_hot(
     shards: &[Option<Vec<u8>>],
     k: usize,
@@ -115,45 +142,47 @@ pub unsafe fn reconstruct_hot(
     let chunks = n / 16;
     let mut output: Vec<Vec<u8>> = vec![vec![0u8; shard_len]; k];
 
-    // masking variable
-    let mask = vdupq_n_u8(0x0F);
+    unsafe {
+        // masking variable
+        let mask = vdupq_n_u8(0x0F);
 
-    // generates tables for all shards
-    let mut tables = Vec::new();
-    for (idx, i) in a_inv.elements.iter().enumerate() {
-        // create tables for each shard
-        let (t_lo_arr, t_hi_arr) = create_tables(*i);
-        let t_lo = vld1q_u8(t_lo_arr.as_ptr()); // low nibble table
-        let t_hi = vld1q_u8(t_hi_arr.as_ptr()); // high nibble table
-        tables.push((t_lo, t_hi)); // loads into two registers and pushes into table 
-    }
+        // generates tables for all shards
+        let mut tables = Vec::new();
+        for (_idx, i) in a_inv.elements.iter().enumerate() {
+            // create tables for each shard
+            let (t_lo_arr, t_hi_arr) = create_tables(*i);
+            let t_lo = vld1q_u8(t_lo_arr.as_ptr()); // low nibble table
+            let t_hi = vld1q_u8(t_hi_arr.as_ptr()); // high nibble table
+            tables.push((t_lo, t_hi)); // loads into two registers and pushes into table
+        }
 
-    for i in 0..k {
-        // loop through the chunks to load into each chunk
-        for c in 0..chunks {
-            let off = c * 16;
-            // create a accumulator register
-            let mut output_acc = vdupq_n_u8(0);
-            // iterate between both shards and shard index simultaneously
-            // index for tables, shards to operate on
-            for (j, s_idx) in survivor_indices.iter().enumerate() {
-                // load shard s
-                let v = vld1q_u8(shards[*s_idx].as_ref().unwrap().as_ptr().add(off));
-                // create tables for each shard
-                let (t_lo, t_hi) = tables[i * k + j];
-                // create low and high nibbles
-                let lo = vandq_u8(v, mask);
-                let hi = vshrq_n_u8::<4>(v);
-                // access table values at chunk location
-                let value_lo = vqtbl1q_u8(t_lo, lo);
-                let value_hi = vqtbl1q_u8(t_hi, hi);
-                // xor these values (multiply)
-                let value_xor = veorq_u8(value_lo, value_hi);
-                // sum into parity accumulator
-                output_acc = veorq_u8(output_acc, value_xor);
+        for i in 0..k {
+            // loop through the chunks to load into each chunk
+            for c in 0..chunks {
+                let off = c * 16;
+                // create a accumulator register
+                let mut output_acc = vdupq_n_u8(0);
+                // iterate between both shards and shard index simultaneously
+                // index for tables, shards to operate on
+                for (j, s_idx) in survivor_indices.iter().enumerate() {
+                    // load shard s
+                    let v = vld1q_u8(shards[*s_idx].as_ref().unwrap().as_ptr().add(off));
+                    // create tables for each shard
+                    let (t_lo, t_hi) = tables[i * k + j];
+                    // create low and high nibbles
+                    let lo = vandq_u8(v, mask);
+                    let hi = vshrq_n_u8::<4>(v);
+                    // access table values at chunk location
+                    let value_lo = vqtbl1q_u8(t_lo, lo);
+                    let value_hi = vqtbl1q_u8(t_hi, hi);
+                    // xor these values (multiply)
+                    let value_xor = veorq_u8(value_lo, value_hi);
+                    // sum into parity accumulator
+                    output_acc = veorq_u8(output_acc, value_xor);
+                }
+                // load parity_accumulator into parity vector
+                vst1q_u8(output[i].as_mut_ptr().add(off), output_acc);
             }
-            // load parity_accumulator into parity vector
-            vst1q_u8(output[i].as_mut_ptr().add(off), output_acc);
         }
     }
     for idx in chunks * 16..n {

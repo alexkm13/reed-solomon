@@ -67,6 +67,7 @@ fn bench_roofline(c: &mut Criterion) {
         );
 
         // --- SIMD (simd::encode, called M times for M parity shards) ---
+        let mut parity_simd: Vec<Vec<u8>> = vec![vec![0u8; shard_size]; M];
         group.bench_with_input(
             BenchmarkId::new("simd", format!("{}KB", shard_size / 1024)),
             &shard_size,
@@ -75,9 +76,13 @@ fn bench_roofline(c: &mut Criterion) {
                     // Produce all M parity shards
                     for p in 0..M {
                         let row_coeffs = &coeffs[p * K..(p + 1) * K];
-                        let parity =
-                            unsafe { simd::encode(black_box(&data_shards), black_box(row_coeffs)) };
-                        black_box(parity);
+                        unsafe {
+                            simd::encode(
+                                black_box(&data_shards),
+                                black_box(row_coeffs),
+                                black_box(&mut parity_simd[p]),
+                            );
+                        }
                     }
                 });
             },

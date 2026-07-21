@@ -87,7 +87,8 @@ mod tests {
                 let coeffs: Vec<u8> = (0..num_shards).map(|s| (s as u8).wrapping_add(1)).collect();
 
                 let expected = encode_scalar(&data_shards, &coeffs);
-                let got = unsafe { encode(&data_shards, &coeffs) };
+                let mut got = vec![0u8; len];
+                unsafe { encode(&data_shards, &coeffs, &mut got) };
 
                 assert_eq!(expected, got, "mismatch: shards={num_shards}, len={len}");
             }

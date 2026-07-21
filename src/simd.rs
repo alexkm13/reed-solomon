@@ -66,79 +66,24 @@ pub fn create_tables(c: u8) -> ([u8; 16], [u8; 16]) {
 
 #[cfg(target_arch = "aarch64")]
 pub unsafe fn mult_into(data: &[u8], c: u8, out: &mut [u8]) {
-    // create tables for low/high nibbles
-    let (t_lo_arr, t_hi_arr) = create_tables(c);
-    let t_lo = vld1q_u8(t_lo_arr.as_ptr());
-    let t_hi = vld1q_u8(t_hi_arr.as_ptr());
+    unsafe {
+        // create tables for low/high nibbles
+        let (t_lo_arr, t_hi_arr) = create_tables(c);
+        let t_lo = vld1q_u8(t_lo_arr.as_ptr());
+        let t_hi = vld1q_u8(t_hi_arr.as_ptr());
 
-    // create variables for byte count and chunks
-    let n = data.len();
-    let chunks = n / 16;
+        // create variables for byte count and chunks
+        let n = data.len();
+        let chunks = n / 16;
 
-    // variable for masking
-    let mask = vdupq_n_u8(0x0F);
+        // variable for masking
+        let mask = vdupq_n_u8(0x0F);
 
-    // iterate through chunks and operate on each chunk
-    for i in 0..chunks {
-        let off = i * 16;
-        let v = vld1q_u8(data.as_ptr().add(off));
-        // create our low and high nibbles
-        let lo = vandq_u8(v, mask);
-        let hi = vshrq_n_u8::<4>(v);
-        // access table values at chunk location
-        let value_lo = vqtbl1q_u8(t_lo, lo);
-        let value_hi = vqtbl1q_u8(t_hi, hi);
-        // xor these values (multiply)
-        let value_xor = veorq_u8(value_lo, value_hi);
-        // store into out register
-        vst1q_u8(out.as_mut_ptr().add(off), value_xor);
-    }
-
-    // tail loop, scalar multiplication
-    for t in (chunks * 16)..n {
-        out[t] = mult(c, data[t], &LOG_TABLE, &EXP_TABLE);
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-pub unsafe fn encode(data_shards: &[Vec<u8>], coeffs: &[u8]) -> Vec<u8> {
-    // produce ONE parity shard from all data shards
-    // parity[byte] = XOR over all shards s of: gf_mul(coeffs[s], data_shards[s][byte])
-    if data_shards.is_empty() {
-        return vec![];
-    }
-
-    // create chunks count and n, along with parity vector
-    let n: usize = data_shards[0].len();
-    let chunks = n / 16;
-    let mut parity: Vec<u8> = vec![0u8; n];
-
-    // masking variable
-    let mask = vdupq_n_u8(0x0F);
-
-    // generates tables for all shards
-    let mut tables = Vec::new();
-    for (idx, i) in data_shards.iter().enumerate() {
-        // create tables for each shard
-        let (t_lo_arr, t_hi_arr) = create_tables(coeffs[idx]);
-        let t_lo = vld1q_u8(t_lo_arr.as_ptr()); // low nibble table
-        let t_hi = vld1q_u8(t_hi_arr.as_ptr()); // high nibble table
-        tables.push((t_lo, t_hi)); // loads into two registers and pushes into table 
-    }
-
-    // loop through the chunks to load into each chunk
-    for c in 0..chunks {
-        let off = c * 16;
-        // create a accumulator register
-        let mut parity_acc = vdupq_n_u8(0);
-        // iterate between both shards and shard index simultaneously
-        // index for tables, shards to operate on
-        for (s_idx, s) in data_shards.iter().enumerate() {
-            // load shard s
-            let v = vld1q_u8(s.as_ptr().add(off));
-            // create tables for each shard
-            let (t_lo, t_hi) = tables[s_idx];
-            // create low and high nibbles
+        // iterate through chunks and operate on each chunk
+        for i in 0..chunks {
+            let off = i * 16;
+            let v = vld1q_u8(data.as_ptr().add(off));
+            // create our low and high nibbles
             let lo = vandq_u8(v, mask);
             let hi = vshrq_n_u8::<4>(v);
             // access table values at chunk location
@@ -146,22 +91,60 @@ pub unsafe fn encode(data_shards: &[Vec<u8>], coeffs: &[u8]) -> Vec<u8> {
             let value_hi = vqtbl1q_u8(t_hi, hi);
             // xor these values (multiply)
             let value_xor = veorq_u8(value_lo, value_hi);
-            // sum into parity accumulator
-            parity_acc = veorq_u8(parity_acc, value_xor);
+            // store into out register
+            vst1q_u8(out.as_mut_ptr().add(off), value_xor);
         }
-        // load parity_accumulator into parity vector
-        vst1q_u8(parity.as_mut_ptr().add(off), parity_acc);
+
+        // tail loop, scalar multiplication
+        for t in (chunks * 16)..n {
+            out[t] = mult(c, data[t], &LOG_TABLE, &EXP_TABLE);
+        }
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+pub unsafe fn encode(data_shards: &[Vec<u8>], coeffs: &[u8], parity: &mut [u8]) {
+    if data_shards.is_empty() {
+        return;
     }
 
-    // tail loop for parity vector, loops through leftover shard elements first
-    // then loops through data shard indexes for coeffs to the shards
+    let n: usize = data_shards[0].len();
+    let chunks = n / 16;
+
+    unsafe {
+        let mask = vdupq_n_u8(0x0F);
+
+        let mut tables = Vec::new();
+        for (idx, _) in data_shards.iter().enumerate() {
+            let (t_lo_arr, t_hi_arr) = create_tables(coeffs[idx]);
+            let t_lo = vld1q_u8(t_lo_arr.as_ptr());
+            let t_hi = vld1q_u8(t_hi_arr.as_ptr());
+            tables.push((t_lo, t_hi));
+        }
+
+        for c in 0..chunks {
+            let off = c * 16;
+            let mut parity_acc = vdupq_n_u8(0);
+            for (s_idx, s) in data_shards.iter().enumerate() {
+                let v = vld1q_u8(s.as_ptr().add(off));
+                let (t_lo, t_hi) = tables[s_idx];
+                let lo = vandq_u8(v, mask);
+                let hi = vshrq_n_u8::<4>(v);
+                let value_lo = vqtbl1q_u8(t_lo, lo);
+                let value_hi = vqtbl1q_u8(t_hi, hi);
+                let value_xor = veorq_u8(value_lo, value_hi);
+                parity_acc = veorq_u8(parity_acc, value_xor);
+            }
+            vst1q_u8(parity.as_mut_ptr().add(off), parity_acc);
+        }
+    }
+
     for i in chunks * 16..n {
+        parity[i] = 0;
         for j in 0..data_shards.len() {
-            // xor for data shards * coeffs[j]
             parity[i] ^= mult(data_shards[j][i], coeffs[j], &LOG_TABLE, &EXP_TABLE);
         }
     }
-    parity
 }
 
 #[cfg(test)]
