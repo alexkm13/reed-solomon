@@ -184,3 +184,15 @@ cargo bench --bench reconstruct_bench # Reconstruct benchmarks
 ```
 
 Generates HTML reports in `target/criterion/`.
+
+# Reed-Solomon Profiler
+
+## Predictions
+- Cache Knee: I initially predicted the cache knee would appear at 512KB. The working set is k (# of data shards) x shard size = 8 x shard size. Throughput holds 16.5 GiB/s at 256KB, but then dropped to 13.2 GiB/s at 1MB, thus putting our knee somewhere around 512KB.
+
+- Time distribution: I believed that our hot path would be around 40-55% of the runtime, which was honestly too low. Using a standalone driver instead of Criterion for the profiler in order to remove the statistical function calls from Criterion and show our encode usage, we get around 83%.
+
+- Prefetching: I believed that the memory stall would be covered by the amount of operations, but I think due to the working set size and our cache size at peak performance, this causes capacity bound issues, so we need to hit the DRAM more often the bigger the working set gets since the cache isn't big enough to keep all of the data in memory. Thus, I believe it was not covered by the operations and stalled due to the amount of DRAM hits. We can see this as 95% of the cycles were useful at a smaller shard size at 16KB but 72.4% were useful at 4MB which is larger. My prediction itself was wrong, but there are stalls which I believe is due to memory and DRAM cycles as I've said above. Apple's PMU exposes a top-down bottleneck breakdown rather than raw cache-miss counters, which is why I'm reporting useful-cycle percentages instead of miss rates.
+
+- Finding:
+I found that there was internal allocation in our encode for the output vector which caused a lot of overhead. This exposed that around 9% of samples were in allocation. By requiring an output vector in the function signature by whatever is calling the function, we can decrease overhead from allocs by 3% from 17.4 GiB/s to 17.9 GiB/s. 
