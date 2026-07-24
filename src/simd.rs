@@ -1,4 +1,5 @@
 use crate::field::{mult, setup_tables};
+use std::thread;
 
 #[cfg(target_arch = "aarch64")]
 use std::arch::aarch64::*;
@@ -147,6 +148,53 @@ pub unsafe fn encode(data_shards: &[Vec<u8>], coeffs: &[u8], parity: &mut [u8]) 
     }
 }
 
+#[cfg(target_arch = "aarch64")]
+pub unsafe fn encode_threaded(data_shards: &[Vec<u8>], coeffs: &[u8], parity: &mut [u8], num_threads: usize) {
+    if data_shards.is_empty() {
+        return;
+    }
+
+    let n: usize = data_shards[0].len();
+    let chunk_byte = ((n / num_threads) + 127) / 128 * 128;
+
+    unsafe {
+        let mask = vdupq_n_u8(0x0F);
+
+        let mut tables = Vec::new();
+        for (idx, _) in data_shards.iter().enumerate() {
+            let (t_lo_arr, t_hi_arr) = create_tables(coeffs[idx]);
+            let t_lo = vld1q_u8(t_lo_arr.as_ptr());
+            let t_hi = vld1q_u8(t_hi_arr.as_ptr());
+            tables.push((t_lo, t_hi));
+        }
+        
+        let tables = &tables;
+        thread::scope(|s| {
+            for (t, parity_slice) in parity.chunks_mut(chunk_byte).enumerate() {
+                let global_base = t * chunk_byte;
+                s.spawn(move || {
+                    for c in 0..(parity_slice.len() / 16) {
+                        let mut parity_acc = vdupq_n_u8(0);
+                        let local_off = c * 16;
+                        let global_off = global_base + local_off;
+
+                        for (s_idx, shard) in data_shards.iter().enumerate() {
+                            let v = vld1q_u8(shard.as_ptr().add(global_off));
+                            let (t_lo, t_hi) = tables[s_idx];
+                            let lo = vandq_u8(v, mask);
+                            let hi = vshrq_n_u8::<4>(v);
+                            let value_lo = vqtbl1q_u8(t_lo, lo);
+                            let value_hi = vqtbl1q_u8(t_hi, hi);
+                            let value_xor = veorq_u8(value_lo, value_hi);
+                            parity_acc = veorq_u8(parity_acc, value_xor);
+                        }
+                        vst1q_u8(parity_slice.as_mut_ptr().add(local_off), parity_acc);
+                    }
+                });
+            }
+        });
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

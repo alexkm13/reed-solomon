@@ -8,14 +8,14 @@ const M: usize = 2;
 const RUN_DURATION: Duration = Duration::from_secs(10);
 
 fn main() {
-    let SHARD_SIZE: usize = std::env::args()
-    .nth(1)
-    .and_then(|s| s.parse().ok())
-    .unwrap_or(16 * 1024);
+    let shard_size: usize = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(16 * 1024);
 
     let data_shards: Vec<Vec<u8>> = (0..K)
         .map(|i| {
-            (0..SHARD_SIZE)
+            (0..shard_size)
                 .map(|j| ((i * 17 + j * 31) % 256) as u8)
                 .collect()
         })
@@ -25,7 +25,7 @@ fn main() {
     let coeffs: Vec<u8> = f.elements[K * K..(K + M) * K].to_vec();
 
     // Pre-allocate parity buffers
-    let mut parity: Vec<Vec<u8>> = vec![vec![0u8; SHARD_SIZE]; M];
+    let mut parity: Vec<Vec<u8>> = vec![vec![0u8; shard_size]; M];
 
     let start = Instant::now();
     let mut iterations: u64 = 0;
@@ -47,7 +47,7 @@ fn main() {
     black_box(&parity);
 
     let elapsed = start.elapsed();
-    let bytes_processed = iterations * (K * SHARD_SIZE) as u64;
+    let bytes_processed = iterations * (K * shard_size) as u64;
     let throughput_gib = bytes_processed as f64 / elapsed.as_secs_f64() / (1024.0 * 1024.0 * 1024.0);
 
     eprintln!(
