@@ -76,17 +76,6 @@ unsafe { encode(&data_shards, &coeffs[i * k..(i + 1) * k], &mut parity); }
 let recovered = unsafe { reconstruct_hot(&shards, k, m).unwrap() };
 ```
 
-## Architecture
-
-```
-src/
-├── field.rs    # GF(256) arithmetic: add, mult, inverse
-├── matrix.rs   # Matrix operations, Vandermonde generation, inversion
-├── simd.rs     # NEON-accelerated encode functions
-├── codec.rs    # High-level encode/reconstruct API
-└── main.rs     # CLI interface
-```
-
 The math uses GF(2^8) with the AES polynomial (x^8 + x^4 + x^3 + x + 1). Multiplication uses log/exp tables; the SIMD path uses nibble-decomposition for vectorized table lookups.
 
 ## Build
