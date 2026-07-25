@@ -8,51 +8,8 @@ const SETUP: ([u8; 256], [u8; 512]) = setup_tables();
 const LOG_TABLE: [u8; 256] = SETUP.0;
 const EXP_TABLE: [u8; 512] = SETUP.1;
 
-pub fn build_tables(c: u8) -> ([u8; 16], [u8; 16]) {
-    let mut mul_hi: [u8; 16] = [0u8; 16];
-    let mut mul_lo: [u8; 16] = [0u8; 16];
-
-    // create tables for nibbles to access
-    for i in 0..16u8 {
-        mul_hi[i as usize] = mult(c, i << 4, &LOG_TABLE, &EXP_TABLE);
-        mul_lo[i as usize] = mult(c, i, &LOG_TABLE, &EXP_TABLE);
-    }
-
-    (mul_hi, mul_lo)
-}
-
-pub fn xor_scalar(a: &[u8], b: &[u8], out: &mut [u8]) {
-    for i in 0..a.len() {
-        out[i] = a[i] ^ b[i];
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-#[target_feature(enable = "neon")]
-unsafe fn xor_neon(a: &[u8], b: &[u8], out: &mut [u8]) {
-    unsafe {
-        let n = a.len();
-        let chunks = n / 16;
-
-        // iterate through the chunks, load, load, xor, store, keep going
-        for c in 0..chunks {
-            let off = c * 16;
-
-            let a_vec = vld1q_u8(a.as_ptr().add(off));
-            let b_vec = vld1q_u8(b.as_ptr().add(off));
-
-            let v_xor = veorq_u8(a_vec, b_vec);
-
-            vst1q_u8(out.as_mut_ptr().add(off), v_xor);
-        }
-
-        // XOR the leftover tail elements outside the chunks
-        for i in (chunks * 16)..n {
-            out[i] = a[i] ^ b[i];
-        }
-    }
-}
-
+/// Creates lookup tables for GF(256) multiplication by constant c.
+/// Returns (lo_nibble_table, hi_nibble_table) for use with SIMD table lookups.
 pub fn create_tables(c: u8) -> ([u8; 16], [u8; 16]) {
     let mut t_lo: [u8; 16] = [0u8; 16];
     let mut t_hi: [u8; 16] = [0u8; 16];
@@ -201,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_create_tables() {
-        let (t_lo, t_hi) = create_tables(0x02);
+        let (_t_lo, t_hi) = create_tables(0x02);
         assert_eq!(t_hi[8], 0x1D);
     }
 }

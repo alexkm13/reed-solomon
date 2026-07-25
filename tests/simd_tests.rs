@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use reed_solomon::field::{mult, setup_tables};
-    use reed_solomon::simd::build_tables;
+    use reed_solomon::simd::create_tables;
     #[cfg(target_arch = "aarch64")]
     use reed_solomon::simd::encode;
     #[cfg(target_arch = "aarch64")]
@@ -12,9 +12,9 @@ mod tests {
     const EXP_TABLE: [u8; 512] = SETUP.1;
 
     #[test]
-    fn build_tables_basic() {
+    fn create_tables_basic() {
         for c in 1..=255u8 {
-            let (hi, lo) = build_tables(c);
+            let (lo, hi) = create_tables(c);
             assert_eq!(lo[0], 0); // c * 0 = 0
             assert_eq!(lo[1], c); // c * 1 = c
             assert_eq!(hi[1], mult(c, 16, &LOG_TABLE, &EXP_TABLE)); // c * (1<<4)
@@ -23,7 +23,7 @@ mod tests {
     #[test]
     fn decomposition_matches_scalar() {
         for c in 0..=255u8 {
-            let (hi, lo) = build_tables(c);
+            let (lo, hi) = create_tables(c);
             for b in 0..=255u8 {
                 let decomposed = hi[(b >> 4) as usize] ^ lo[(b & 0x0F) as usize];
                 let direct = mult(c, b, &LOG_TABLE, &EXP_TABLE);

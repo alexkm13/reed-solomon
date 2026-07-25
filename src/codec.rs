@@ -36,6 +36,8 @@ pub fn split(data: &[u8], k: usize) -> Vec<Vec<u8>> {
     shards
 }
 
+/// Scalar reference implementation (oracle) for encoding.
+/// Uses matrix multiplication - simple but slow. Use simd::encode for performance.
 pub fn encode(data_shards: &[Vec<u8>], m: usize) -> Result<Vec<Vec<u8>>, MatrixError> {
     let shard_len: usize = data_shards[0].len();
     let k: usize = data_shards.len();
@@ -65,7 +67,8 @@ pub fn encode(data_shards: &[Vec<u8>], m: usize) -> Result<Vec<Vec<u8>>, MatrixE
     Ok(parity_shards)
 }
 
-/// Scalar encode for benchmarking - writes parity shards in place
+/// Scalar reference implementation (oracle) for benchmarking against simd::encode.
+/// Direct coefficient multiplication without matrix overhead.
 pub fn encode_hot(
     coeffs: &[u8],
     data_shards: &[Vec<u8>],
@@ -92,6 +95,8 @@ pub fn encode_hot(
     }
 }
 
+/// SIMD-optimized reconstruction using NEON intrinsics.
+/// Use this for performance. See reconstruct_scalar for reference implementation.
 pub unsafe fn reconstruct_hot(
     shards: &[Option<Vec<u8>>],
     k: usize,
@@ -200,6 +205,8 @@ pub unsafe fn reconstruct_hot(
     Ok(output)
 }
 
+/// Scalar reference implementation (oracle) for reconstruction.
+/// Simple but slow - use reconstruct_hot for performance.
 pub fn reconstruct_scalar(
     shards: &[Option<Vec<u8>>],
     k: usize,
