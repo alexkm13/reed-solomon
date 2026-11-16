@@ -25,15 +25,15 @@ diff testfile.txt recovered.txt && echo "Perfect recovery!"
 
 ## Performance
 
-Benchmarked on Apple M3 Pro with 4MB shards (k=8, m=2):
+Single-threaded encode on an Apple M4 Pro (k=8 data, m=2 parity), measured with Criterion:
 
 | Implementation | Throughput | Speedup |
 |----------------|------------|---------|
-| Scalar         | 0.6 GiB/s  | 1x      |
-| SIMD (NEON)    | 18 GiB/s   | 30x     |
-| SIMD + 8 threads | 113 GiB/s | 188x   |
+| Scalar         | ~0.56 GiB/s | 1x     |
+| SIMD (NEON), 16 KB shards (peak) | 17.6 GiB/s | 32x |
+| SIMD (NEON), 4 MB shards | 13.5 GiB/s | 29x |
 
-Threading scales linearly up to ~8 threads before hitting memory bandwidth limits.
+Throughput peaks when the working set fits in L2 cache. See [docs/benchmarks.md](docs/benchmarks.md) for the full sweep from 1 KB to 4 MB shards, the setup, and how fixing the hot loop took SIMD from 885 MiB/s to 17.6 GiB/s.
 
 ## The Optimization Story
 
